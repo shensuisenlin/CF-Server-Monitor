@@ -1,4 +1,5 @@
 import { checkAuth, authResponse } from '../middleware/auth.js';
+import { clearNotificationSettingsCache } from '../services/notification.js';
 
 function isValidUUID(id) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -21,6 +22,9 @@ export async function handleAdminAPI(request, env, sys) {
         await env.DB.prepare(
           'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
         ).bind(k, v).run();
+      }
+      if (data.settings && ('tg_notify' in data.settings || 'tg_bot_token' in data.settings || 'tg_chat_id' in data.settings)) {
+        clearNotificationSettingsCache();
       }
       return new Response(JSON.stringify({ success: true, message: '设置已保存' }), {
         headers: { 'Content-Type': 'application/json' }

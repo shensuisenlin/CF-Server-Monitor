@@ -1,6 +1,10 @@
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
+let cachedSettings = null;
+let cacheExpiry = 0;
+const CACHE_TTL = 60 * 1000;
+
 async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
   for (let i = 0; i < retries; i++) {
     try {
@@ -22,23 +26,45 @@ async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
 }
 
 async function loadNotificationSettings(db) {
+  const now = Date.now();
+  if (cachedSettings && now < cacheExpiry) {
+    return cachedSettings;
+  }
+
+  const tgNotifyRes = await db.prepare(
+    "SELECT value FROM settings WHERE key = 'tg_notify'"
+  ).first();
+
+  if (!tgNotifyRes || tgNotifyRes.value !== 'true') {
+    cachedSettings = { tg_notify: 'false', tg_bot_token: '', tg_chat_id: '' };
+    cacheExpiry = now + CACHE_TTL;
+    return cachedSettings;
+  }
+
   const { results } = await db.prepare(
-    "SELECT key, value FROM settings WHERE key IN ('tg_notify', 'tg_bot_token', 'tg_chat_id')"
+    "SELECT key, value FROM settings WHERE key IN ('tg_bot_token', 'tg_chat_id')"
   ).all();
-  
+
   const settings = {
-    tg_notify: 'false',
+    tg_notify: 'true',
     tg_bot_token: '',
     tg_chat_id: ''
   };
-  
+
   if (results) {
     results.forEach(r => {
       settings[r.key] = r.value;
     });
   }
-  
+
+  cachedSettings = settings;
+  cacheExpiry = now + CACHE_TTL;
   return settings;
+}
+
+export function clearNotificationSettingsCache() {
+  cachedSettings = null;
+  cacheExpiry = 0;
 }
 
 export async function sendTelegramNotification(settings, msg) {
