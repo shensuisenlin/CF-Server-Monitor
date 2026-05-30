@@ -11,17 +11,17 @@
               class="toggle-btn" 
               :class="{ active: currentView === 'card' }"
               @click="switchView('card')"
-            >▣ CARDS</button>
+            >▣ {{ trans.cards }}</button>
             <button 
               class="toggle-btn" 
               :class="{ active: currentView === 'table' }"
               @click="switchView('table')"
-            >≡ TABLE</button>
+            >≡ {{ trans.table }}</button>
             <button 
               class="toggle-btn" 
               :class="{ active: currentView === 'map' }"
               @click="switchView('map')"
-            >◉ MAP</button>
+            >◉ {{ trans.map }}</button>
           </div>
           <a href="/admin" class="admin-link">⚙ {{ sysConfig.admin_title || 'Admin' }}</a>
         </div>
@@ -38,26 +38,26 @@
           <span v-if="code !== 'all'">
             <img v-if="code !== 'all'" :src="'https://flagcdn.com/16x12/' + (code || 'xx').toLowerCase() + '.png'" :alt="code">
           </span>
-          {{ code === 'all' ? '[All]' : code }} {{ count }}
+          {{ code === 'all' ? '[' + trans.all + ']' : code }} {{ count }}
         </span>
       </div>
     </div>
 
     <div class="global-stats">
       <div class="stat-item">
-        <div class="stat-label">Total Servers</div>
+        <div class="stat-label">{{ trans.totalServers }}</div>
         <div class="stat-main-value">{{ stats.total }}</div>
         <div class="stat-sub-info">
-          <span style="color:var(--accent-green);">ON:{{ stats.online }}</span> |
-          <span style="color:var(--accent-red);">OFF:{{ stats.offline }}</span>
+          <span style="color:var(--accent-green);">{{ trans.online }}:{{ stats.online }}</span> |
+          <span style="color:var(--accent-red);">{{ trans.offline }}:{{ stats.offline }}</span>
         </div>
       </div>
       <div class="stat-item">
-        <div class="stat-label">Total Traffic</div>
+        <div class="stat-label">{{ trans.totalTraffic }}</div>
         <div class="stat-main-value" style="font-size:16px;">{{ formatBytes(stats.globalNetRx) }} ↓ | ↑ {{ formatBytes(stats.globalNetTx) }}</div>
       </div>
       <div class="stat-item">
-        <div class="stat-label">Real-time Speed</div>
+        <div class="stat-label">{{ trans.realtimeSpeed }}</div>
         <div class="stat-main-value" style="font-size:16px;">
           <span style="color:var(--accent-green);">↓ {{ formatBytes(stats.globalSpeedIn) }}/s</span> |
           <span style="color:var(--accent-blue);">↑ {{ formatBytes(stats.globalSpeedOut) }}/s</span>
@@ -67,7 +67,7 @@
 
     <div id="view-card" class="view-panel" :class="{ active: currentView === 'card' }">
       <div v-if="groupedServers.length === 0" class="empty-state">
-        [!] 暂无服务器，请在 <a href="/admin" style="color: var(--accent-cyan);">后台管理</a> 中添加
+        [!] {{ trans.noServer }}，请在 <a href="/admin" style="color: var(--accent-cyan);">{{ trans.backToAdmin }}</a> 中添加
       </div>
       <div v-else>
         <div v-for="group in groupedServers" :key="group.name" class="group-section">
@@ -91,26 +91,26 @@
         <table class="terminal-table">
           <thead>
             <tr>
-              <th>STAT</th>
-              <th>HOSTNAME</th>
-              <th>REGION</th>
-              <th>ARCH/OS</th>
-              <th>CPU</th>
-              <th>RAM</th>
-              <th>DISK</th>
-              <th>↓ DL</th>
-              <th>↑ UL</th>
-              <th>↓ RX</th>
-              <th>↑ TX</th>
-              <th>UPDATE</th>
+              <th>{{ trans.hostname.substring(0, 4) }}</th>
+              <th>{{ trans.hostname }}</th>
+              <th>{{ trans.region }}</th>
+              <th>{{ trans.archOs }}</th>
+              <th>{{ trans.cpu }}</th>
+              <th>{{ trans.ram }}</th>
+              <th>{{ trans.disk }}</th>
+              <th>{{ trans.dl }}</th>
+              <th>{{ trans.ul }}</th>
+              <th>{{ trans.rx }}</th>
+              <th>{{ trans.tx }}</th>
+              <th>{{ trans.update }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-if="servers.length === 0">
-              <td colspan="12" style="text-align:center; color:var(--text-muted);">[*] No data available</td>
+            <tr v-if="filteredServers.length === 0">
+              <td colspan="12" style="text-align:center; color:var(--text-muted);">[*] {{ trans.noData }}</td>
             </tr>
             <tr 
-              v-for="server in servers" 
+              v-for="server in filteredServers" 
               :key="server.id"
               @click="goToServer(server.id)"
               style="cursor:pointer;"
@@ -156,7 +156,7 @@
               <td>{{ formatBytes(server.net_out_speed) }}/s</td>
               <td>{{ formatBytes(server.net_rx) }}</td>
               <td>{{ formatBytes(server.net_tx) }}</td>
-              <td class="update-time">{{ getUpdateTime(server.last_updated) }}s ago</td>
+              <td class="update-time">{{ getUpdateTime(server.last_updated) }}{{ trans.ago }}</td>
             </tr>
           </tbody>
         </table>
@@ -170,7 +170,7 @@
     </div>
 
     <footer class="footer">
-      V1.3 | Powered by <a href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank">CF-Server-Monitor</a>
+      V1.3 | {{ trans.poweredBy }} <a href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank">CF-Server-Monitor</a>
     </footer>
   </div>
 </template>
@@ -180,6 +180,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import TerminalHeader from '../components/TerminalHeader.vue'
 import ServerCard from '../components/ServerCard.vue'
 import { fetchServers, formatBytes } from '../utils/api'
+import { t, currentLang } from '../utils/i18n'
+import { translations } from '../utils/i18n'
 
 const servers = ref([])
 const stats = ref({ total: '-', online: 0, offline: 0, globalNetRx: 0, globalNetTx: 0, globalSpeedIn: 0, globalSpeedOut: 0 })
@@ -196,6 +198,8 @@ const currentView = ref('card')
 const currentFilter = ref('all')
 const mapInitialized = ref(false)
 
+const trans = computed(() => translations[currentLang.value] || translations.en)
+
 const filterOptions = computed(() => {
   const normalizedStats = {}
   for (const code in countryStats.value) {
@@ -207,7 +211,8 @@ const filterOptions = computed(() => {
 const groupedServers = computed(() => {
   const groups = {}
   const order = []
-  servers.value.forEach(server => {
+  const filteredList = currentFilter.value === 'all' ? servers.value : servers.value.filter(s => (s.country || 'xx').toLowerCase() === currentFilter.value)
+  filteredList.forEach(server => {
     const groupName = server.server_group || 'Default'
     if (!groups[groupName]) {
       groups[groupName] = []

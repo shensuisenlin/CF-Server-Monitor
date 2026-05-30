@@ -59,19 +59,19 @@
     <div class="ping-panel">
       <div class="ping-item">
         <span class="ping-label">CT</span>
-        <span class="ping-value" :style="{ color: getPingColor(server.ping_ct) }">{{ server.ping_ct === '0' ? 'TIMEOUT' : server.ping_ct + 'ms' }}</span>
+        <span class="ping-value" :style="{ color: getPingColor(server.ping_ct) }">{{ server.ping_ct === '0' ? trans.timeout : server.ping_ct + 'ms' }}</span>
       </div>
       <div class="ping-item">
         <span class="ping-label">CU</span>
-        <span class="ping-value" :style="{ color: getPingColor(server.ping_cu) }">{{ server.ping_cu === '0' ? 'TIMEOUT' : server.ping_cu + 'ms' }}</span>
+        <span class="ping-value" :style="{ color: getPingColor(server.ping_cu) }">{{ server.ping_cu === '0' ? trans.timeout : server.ping_cu + 'ms' }}</span>
       </div>
       <div class="ping-item">
         <span class="ping-label">CM</span>
-        <span class="ping-value" :style="{ color: getPingColor(server.ping_cm) }">{{ server.ping_cm === '0' ? 'TIMEOUT' : server.ping_cm + 'ms' }}</span>
+        <span class="ping-value" :style="{ color: getPingColor(server.ping_cm) }">{{ server.ping_cm === '0' ? trans.timeout : server.ping_cm + 'ms' }}</span>
       </div>
       <div class="ping-item">
         <span class="ping-label">BD</span>
-        <span class="ping-value" :style="{ color: getPingColor(server.ping_bd) }">{{ server.ping_bd === '0' ? 'TIMEOUT' : server.ping_bd + 'ms' }}</span>
+        <span class="ping-value" :style="{ color: getPingColor(server.ping_bd) }">{{ server.ping_bd === '0' ? trans.timeout : server.ping_bd + 'ms' }}</span>
       </div>
     </div>
   </a>
@@ -80,6 +80,8 @@
 <script setup>
 import { computed } from 'vue'
 import { formatBytes } from '../utils/api'
+import { t, currentLang } from '../utils/i18n'
+import { translations } from '../utils/i18n'
 
 const props = defineProps({
   server: {
@@ -97,6 +99,8 @@ const props = defineProps({
   }
 })
 
+const trans = computed(() => translations[currentLang.value] || translations.en)
+
 const now = Date.now()
 
 const countryCode = computed(() => (props.server.country || 'xx').toLowerCase())
@@ -107,7 +111,7 @@ const isOnline = computed(() => {
 })
 
 const statusColor = computed(() => isOnline.value ? 'var(--accent-green)' : 'var(--accent-red)')
-const statusText = computed(() => isOnline.value ? 'ONLINE' : 'OFFLINE')
+const statusText = computed(() => isOnline.value ? trans.value.online : trans.value.offline)
 
 const cpuPercent = computed(() => parseFloat(props.server.cpu || 0).toFixed(1))
 const ramPercent = computed(() => parseFloat(props.server.ram || 0).toFixed(1))

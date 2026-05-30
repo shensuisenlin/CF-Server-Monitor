@@ -77,6 +77,25 @@ body.light .theme-toggle {
   border-color: #d4d4c8;
 }
 
+body.light .lang-toggle {
+  background: #ffffff;
+  border-color: #d4d4c8;
+}
+
+body.light .lang-btn {
+  color: #5c5c5c;
+}
+
+body.light .lang-btn:hover {
+  background: #f0f0e8;
+  color: #2c2c2c;
+}
+
+body.light .lang-btn.active {
+  background: #0d9488;
+  color: #ffffff;
+}
+
 body.light .theme-btn {
   color: #5c5c5c;
 }

@@ -6,34 +6,51 @@
       <span class="terminal-dot green"></span>
     </div>
     <div class="terminal-title">{{ title }}</div>
-    <div class="terminal-header-theme">
-      <span class="theme-label">Theme:</span>
-      <div class="theme-toggle">
+    <div class="terminal-header-controls">
+      <div class="lang-toggle">
         <button 
-          class="theme-btn" 
-          :class="{ active: currentTheme === 'auto' }"
-          @click="setTheme('auto')"
-          title="Auto - Follow System"
-        >🌙☀</button>
+          class="lang-btn" 
+          :class="{ active: currentLang === 'en' }"
+          @click="setLang('en')"
+          title="English"
+        >EN</button>
         <button 
-          class="theme-btn" 
-          :class="{ active: currentTheme === 'dark' }"
-          @click="setTheme('dark')"
-          title="Dark Mode"
-        >🌙</button>
-        <button 
-          class="theme-btn" 
-          :class="{ active: currentTheme === 'light' }"
-          @click="setTheme('light')"
-          title="Light Mode"
-        >☀</button>
+          class="lang-btn" 
+          :class="{ active: currentLang === 'zh' }"
+          @click="setLang('zh')"
+          title="中文"
+        >中</button>
+      </div>
+      <div class="theme-toggle-wrapper">
+        <span class="theme-label">{{ t('theme') }}:</span>
+        <div class="theme-toggle">
+          <button 
+            class="theme-btn" 
+            :class="{ active: currentTheme === 'auto' }"
+            @click="setTheme('auto')"
+            title="Auto - Follow System"
+          >🌙☀</button>
+          <button 
+            class="theme-btn" 
+            :class="{ active: currentTheme === 'dark' }"
+            @click="setTheme('dark')"
+            title="Dark Mode"
+          >🌙</button>
+          <button 
+            class="theme-btn" 
+            :class="{ active: currentTheme === 'light' }"
+            @click="setTheme('light')"
+            title="Light Mode"
+          >☀</button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { t, setLanguage, getLanguage } from '../utils/i18n'
 
 defineProps({
   title: {
@@ -43,6 +60,7 @@ defineProps({
 })
 
 const currentTheme = ref('dark')
+const currentLang = ref('en')
 
 const getPreferredTheme = () => {
   return localStorage.getItem('theme_preference') || 'dark'
@@ -65,8 +83,23 @@ const applyTheme = (theme) => {
   }
 }
 
+const setLang = (lang) => {
+  setLanguage(lang)
+  currentLang.value = lang
+}
+
+const handleLanguageChange = (e) => {
+  currentLang.value = e.detail.lang
+}
+
 onMounted(() => {
   currentTheme.value = getPreferredTheme()
   applyTheme(currentTheme.value)
+  currentLang.value = getLanguage()
+  window.addEventListener('languageChanged', handleLanguageChange)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('languageChanged', handleLanguageChange)
 })
 </script>

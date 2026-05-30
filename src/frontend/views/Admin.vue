@@ -339,7 +339,7 @@
       </div>
 
       <footer class="footer">
-        V1.3 | Powered by <a href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank">CF-Server-Monitor</a>
+        V1.3 | {{ trans.poweredBy }} <a href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank">CF-Server-Monitor</a>
       </footer>
     </div>
   </div>
@@ -349,8 +349,12 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import TerminalHeader from '../components/TerminalHeader.vue'
 import { adminApi, login, logout as apiLogout, formatBytes } from '../utils/api'
+import { t, currentLang } from '../utils/i18n'
+import { translations } from '../utils/i18n'
 
 const API_BASE = window.location.origin
+
+const trans = computed(() => translations[currentLang.value] || translations.en)
 
 const isLoggedIn = ref(false)
 const loginForm = ref({ username: '', password: '' })

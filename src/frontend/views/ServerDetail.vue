@@ -7,7 +7,7 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
-        cd ..
+        {{ trans.back }}
       </a>
       <div class="time-selector" v-show="historyLoaded" id="time-selector">
         <button 
@@ -33,56 +33,56 @@
         </div>
         <span class="status-badge" :class="{ online: isOnline, offline: !isOnline }">
           <span class="pulse-dot" :class="{ online: isOnline, offline: !isOnline }"></span>
-          <span>{{ isOnline ? 'ONLINE' : 'OFFLINE' }}</span>
+          <span>{{ isOnline ? trans.online : trans.offline }}</span>
         </span>
       </div>
       <div class="sysinfo-grid" id="info-panel">
         <div class="sysinfo-item">
-          <span class="sysinfo-label">⏱ Uptime</span>
+          <span class="sysinfo-label">⏱ {{ trans.uptime }}</span>
           <span class="sysinfo-value">{{ server.uptime || 'N/A' }}</span>
         </div>
         <div class="sysinfo-item">
-          <span class="sysinfo-label">🏗 Architecture</span>
+          <span class="sysinfo-label">🏗 {{ trans.architecture }}</span>
           <span class="sysinfo-value">{{ server.arch || 'N/A' }}</span>
         </div>
         <div class="sysinfo-item">
-          <span class="sysinfo-label">💻 OS</span>
+          <span class="sysinfo-label">💻 {{ trans.os }}</span>
           <span class="sysinfo-value">{{ server.os || 'N/A' }}</span>
         </div>
         <div class="sysinfo-item">
-          <span class="sysinfo-label">🔧 CPU Model</span>
+          <span class="sysinfo-label">🔧 {{ trans.cpuModel }}</span>
           <span class="sysinfo-value" style="font-size:11px;">{{ server.cpu_model || 'N/A' }}</span>
         </div>
         <div class="sysinfo-item">
-          <span class="sysinfo-label">⚙️ CPU Cores</span>
+          <span class="sysinfo-label">⚙️ {{ trans.cpuCores }}</span>
           <span class="sysinfo-value">{{ server.cpu_cores || 'N/A' }}</span>
         </div>
         <div class="sysinfo-item">
-          <span class="sysinfo-label">📊 Load Average</span>
+          <span class="sysinfo-label">📊 {{ trans.loadAvg }}</span>
           <span class="sysinfo-value highlight">{{ server.load_avg || '0.00' }}</span>
         </div>
         <div class="sysinfo-item">
-          <span class="sysinfo-label">🕐 Boot Time</span>
+          <span class="sysinfo-label">🕐 {{ trans.bootTime }}</span>
           <span class="sysinfo-value" style="font-size:11px;">{{ server.boot_time || 'N/A' }}</span>
         </div>
         <div class="sysinfo-item">
-          <span class="sysinfo-label">💾 Total RAM</span>
+          <span class="sysinfo-label">💾 {{ trans.totalRam }}</span>
           <span class="sysinfo-value">{{ formatBytes(server.ram_total) }}</span>
         </div>
         <div class="sysinfo-item">
-          <span class="sysinfo-label">💿 Total Disk</span>
+          <span class="sysinfo-label">💿 {{ trans.totalDisk }}</span>
           <span class="sysinfo-value">{{ formatBytes(server.disk_total) }}</span>
         </div>
         <div class="sysinfo-item">
-          <span class="sysinfo-label">🔽 Traffic In</span>
+          <span class="sysinfo-label">🔽 {{ trans.trafficIn }}</span>
           <span class="sysinfo-value">{{ formatBytes(server.net_rx) }}</span>
         </div>
         <div class="sysinfo-item">
-          <span class="sysinfo-label">🔼 Traffic Out</span>
+          <span class="sysinfo-label">🔼 {{ trans.trafficOut }}</span>
           <span class="sysinfo-value">{{ formatBytes(server.net_tx) }}</span>
         </div>
         <div class="sysinfo-item">
-          <span class="sysinfo-label">⏰ Last Report</span>
+          <span class="sysinfo-label">⏰ {{ trans.lastReport }}</span>
           <span class="sysinfo-value">{{ lastReportTime }}</span>
         </div>
       </div>
@@ -93,7 +93,7 @@
         <div class="chart-card-header">
           <span class="chart-title">
             <span class="chart-title-icon">▸</span>
-            CPU Usage
+            {{ trans.cpuUsage }}
           </span>
           <span class="chart-current-value">{{ cpuPercent }}%</span>
         </div>
@@ -106,11 +106,11 @@
         <div class="chart-card-header">
           <span class="chart-title">
             <span class="chart-title-icon">▸</span>
-            Memory Usage
+            {{ trans.memoryUsage }}
           </span>
           <div>
             <span class="chart-current-value">{{ ramPercent }}%</span>
-            <div class="chart-subtitle">Swap: {{ server.swap_used || '0' }} / {{ server.swap_total || '0' }} MiB</div>
+            <div class="chart-subtitle">{{ trans.swap }}: {{ server.swap_used || '0' }} / {{ server.swap_total || '0' }} MiB</div>
           </div>
         </div>
         <div class="chart-body">
@@ -122,11 +122,11 @@
         <div class="chart-card-header">
           <span class="chart-title">
             <span class="chart-title-icon">▸</span>
-            Disk Usage
+            {{ trans.diskUsage }}
           </span>
           <div>
             <span class="chart-current-value">{{ diskPercent }}%</span>
-            <div class="chart-subtitle">Used {{ formatBytes(server.disk_used) }} / {{ formatBytes(server.disk_total) }}</div>
+            <div class="chart-subtitle">{{ trans.used }} {{ formatBytes(server.disk_used) }} / {{ formatBytes(server.disk_total) }}</div>
           </div>
         </div>
         <div class="chart-body">
@@ -138,7 +138,7 @@
         <div class="chart-card-header">
           <span class="chart-title">
             <span class="chart-title-icon">▸</span>
-            Network Traffic
+            {{ trans.networkTraffic }}
           </span>
           <div class="net-indicator">
             <span class="net-down">▼ {{ formatBytes(server.net_in_speed) }}/s</span>
@@ -154,7 +154,7 @@
         <div class="chart-card-header">
           <span class="chart-title">
             <span class="chart-title-icon">▸</span>
-            Processes
+            {{ trans.processes }}
           </span>
           <span class="chart-current-value">{{ server.processes || '0' }}</span>
         </div>
@@ -167,7 +167,7 @@
         <div class="chart-card-header">
           <span class="chart-title">
             <span class="chart-title-icon">▸</span>
-            Connections
+            {{ trans.connections }}
           </span>
           <div class="net-indicator">
             <span style="color: var(--accent-purple);">TCP <b>{{ server.tcp_conn || '0' }}</b></span>
@@ -183,13 +183,13 @@
         <div class="chart-card-header">
           <span class="chart-title">
             <span class="chart-title-icon">▸</span>
-            Latency Monitor
+            {{ trans.latencyMonitor }}
           </span>
           <div style="display: flex; gap: 20px; font-size: 11px; font-weight: 500;">
-            <span style="color: var(--accent-green);">CT <b>{{ server.ping_ct || '0' }}ms</b></span>
-            <span style="color: var(--accent-yellow);">CU <b>{{ server.ping_cu || '0' }}ms</b></span>
-            <span style="color: var(--accent-blue);">CM <b>{{ server.ping_cm || '0' }}ms</b></span>
-            <span style="color: var(--accent-purple);">BD <b>{{ server.ping_bd || '0' }}ms</b></span>
+            <span style="color: var(--accent-green);">{{ trans.pingCt }} <b>{{ server.ping_ct || '0' }}ms</b></span>
+            <span style="color: var(--accent-yellow);">{{ trans.pingCu }} <b>{{ server.ping_cu || '0' }}ms</b></span>
+            <span style="color: var(--accent-blue);">{{ trans.pingCm }} <b>{{ server.ping_cm || '0' }}ms</b></span>
+            <span style="color: var(--accent-purple);">{{ trans.pingBd }} <b>{{ server.ping_bd || '0' }}ms</b></span>
           </div>
         </div>
         <div class="chart-body">
@@ -201,15 +201,15 @@
     <div class="status-bar">
       <div class="status-bar-item">
         <span class="status-bar-dot"></span>
-        <span>Last update: <span>{{ lastUpdateText }}</span></span>
+        <span>{{ trans.lastUpdate }}: <span>{{ lastUpdateText }}</span></span>
       </div>
       <div class="status-bar-item">
-        <span>Auto-refresh: 60s (status)</span>
+        <span>{{ trans.autoRefresh }}: 60{{ trans.seconds }}</span>
       </div>
     </div>
 
     <footer class="footer">
-      V1.3 | Powered by <a href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank">CF-Server-Monitor</a>
+      V1.3 | {{ trans.poweredBy }} <a href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank">CF-Server-Monitor</a>
     </footer>
   </div>
 </template>
@@ -221,10 +221,11 @@ import TerminalHeader from '../components/TerminalHeader.vue'
 import { fetchServerDetail, fetchAllHistory, fetchAggHistory, formatBytes } from '../utils/api'
 import Chart from 'chart.js/auto'
 import 'chartjs-adapter-date-fns'
+import { t, currentLang } from '../utils/i18n'
+import { translations } from '../utils/i18n'
 
 const route = useRoute()
 
-// 支持路径参数 (/server/:id) 和查询参数 (/server?id=)
 let serverId = route.params.id
 if (!serverId) {
   const urlParams = new URLSearchParams(window.location.search)
@@ -239,6 +240,8 @@ const server = ref({})
 const currentHours = ref(1)
 const lastUpdateText = ref('just now')
 const oneHourDataCache = ref(null)
+
+const trans = computed(() => translations[currentLang.value] || translations.en)
 
 const timeOptions = [
   { hours: 0.167, label: '10m' },
