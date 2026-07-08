@@ -149,6 +149,38 @@ export async function rebuildDatabase(db) {
   }
 }
 
+async function hasHistoryServerTimeIndex(db, tableName) {
+  const index = await db.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'index'
+      AND tbl_name = ?
+      AND sql IS NOT NULL
+      AND LOWER(sql) LIKE '%server_id%'
+      AND LOWER(sql) LIKE '%timestamp%'
+    LIMIT 1
+  `).bind(tableName).first();
+
+  return !!index;
+}
+
+function buildHistorySourceQuery(tableName, useIdRange, columns) {
+  if (useIdRange) {
+    return `
+      SELECT timestamp, ${columns} FROM ${tableName}
+      WHERE id >= ?
+        AND id <= ?
+    `;
+  }
+
+  return `
+    SELECT timestamp, ${columns} FROM ${tableName}
+    WHERE server_id = ?
+      AND typeof(timestamp) = 'integer'
+      AND timestamp >= ?
+  `;
+}
+
 export async function getMetricsHistory(db, serverId, hours, columns, server = null) {
   const now = Date.now();
   const cacheDuration = getCacheDuration(hours);
@@ -206,117 +238,62 @@ export async function getMetricsHistory(db, serverId, hours, columns, server = n
     `SELECT name FROM sqlite_master WHERE type='table' AND name='metrics_history_old'`
   ).first();
 
-  let rawResult;
-
   const history_id_optimized = await getSettingByKey(db, 'history_id_optimized', true);
-  if (history_id_optimized) {
+  const currentHasServerTimeIndex = history_id_optimized
+    ? false
+    : await hasHistoryServerTimeIndex(db, 'metrics_history');
+  const currentUsesIdRange = history_id_optimized || !currentHasServerTimeIndex;
+  const oldUsesIdRange = oldTableExists
+    ? history_id_optimized || !await hasHistoryServerTimeIndex(db, 'metrics_history_old')
+    : false;
+  const needsIdRange = currentUsesIdRange || oldUsesIdRange;
+
+  let idRange = null;
+  if (needsIdRange) {
     if (!historyInfo.partitionId) {
       throw new Error('Invalid history partition id');
     }
 
-    const { startId, endId } = getHistoryIdRange(historyInfo.partitionId, queryStart);
+    idRange = getHistoryIdRange(historyInfo.partitionId, queryStart);
+  }
 
-    if (oldTableExists) {
-      debug('[History] 跨周查询，合并 metrics_history 和 metrics_history_old');
+  const sourceQueries = [];
+  const bindValues = [intervalMs];
 
-      rawResult = await db.prepare(`
-        WITH sampled AS (
-          SELECT
-            timestamp,
-            ${columns},
-            ROW_NUMBER() OVER (
-              PARTITION BY CAST(timestamp / ? AS INTEGER)
-              ORDER BY timestamp
-            ) AS rn
-          FROM (
-            SELECT timestamp, ${columns} FROM metrics_history
-            WHERE id >= ?
-              AND id <= ?
-
-            UNION ALL
-
-            SELECT timestamp, ${columns} FROM metrics_history_old
-            WHERE id >= ?
-              AND id <= ?
-          )
-        )
-        SELECT timestamp, ${columns}
-        FROM sampled
-        WHERE rn = 1
-      `).bind(intervalMs, startId, endId, startId, endId).all();
-    } else {
-      rawResult = await db.prepare(`
-        WITH sampled AS (
-          SELECT
-            timestamp,
-            ${columns},
-            ROW_NUMBER() OVER (
-              PARTITION BY CAST(timestamp / ? AS INTEGER)
-              ORDER BY timestamp
-            ) AS rn
-          FROM metrics_history
-          WHERE id >= ?
-            AND id <= ?
-        )
-        SELECT timestamp, ${columns}
-        FROM sampled
-        WHERE rn = 1
-      `).bind(intervalMs, startId, endId).all();
-    }
+  sourceQueries.push(buildHistorySourceQuery('metrics_history', currentUsesIdRange, columns));
+  if (currentUsesIdRange) {
+    bindValues.push(idRange.startId, idRange.endId);
   } else {
-    if (oldTableExists) {
-      // 跨周查询，使用 UNION ALL 合并两个表
-      debug('[History] 跨周查询，合并 metrics_history 和 metrics_history_old');
+    bindValues.push(serverId, queryStart);
+  }
 
-      rawResult = await db.prepare(`
-        WITH sampled AS (
-          SELECT
-            timestamp,
-            ${columns},
-            ROW_NUMBER() OVER (
-              PARTITION BY CAST(timestamp / ? AS INTEGER)
-              ORDER BY timestamp
-            ) AS rn
-          FROM (
-            SELECT timestamp, ${columns} FROM metrics_history
-            WHERE server_id = ?
-              AND typeof(timestamp) = 'integer'
-              AND timestamp >= ?
-
-            UNION ALL
-
-            SELECT timestamp, ${columns} FROM metrics_history_old
-            WHERE server_id = ?
-              AND typeof(timestamp) = 'integer'
-              AND timestamp >= ?
-          )
-        )
-        SELECT timestamp, ${columns}
-        FROM sampled
-        WHERE rn = 1
-      `).bind(intervalMs, serverId, queryStart, serverId, queryStart).all();
+  if (oldTableExists) {
+    debug('[History] 跨周查询，合并 metrics_history 和 metrics_history_old');
+    sourceQueries.push(buildHistorySourceQuery('metrics_history_old', oldUsesIdRange, columns));
+    if (oldUsesIdRange) {
+      bindValues.push(idRange.startId, idRange.endId);
     } else {
-      // 单表查询
-      rawResult = await db.prepare(`
-        WITH sampled AS (
-          SELECT
-            timestamp,
-            ${columns},
-            ROW_NUMBER() OVER (
-              PARTITION BY CAST(timestamp / ? AS INTEGER)
-              ORDER BY timestamp
-            ) AS rn
-          FROM metrics_history
-          WHERE server_id = ?
-            AND typeof(timestamp) = 'integer'
-            AND timestamp >= ?
-        )
-        SELECT timestamp, ${columns}
-        FROM sampled
-        WHERE rn = 1
-      `).bind(intervalMs, serverId, queryStart).all();
+      bindValues.push(serverId, queryStart);
     }
   }
+
+  const rawResult = await db.prepare(`
+    WITH sampled AS (
+      SELECT
+        timestamp,
+        ${columns},
+        ROW_NUMBER() OVER (
+          PARTITION BY CAST(timestamp / ? AS INTEGER)
+          ORDER BY timestamp
+        ) AS rn
+      FROM (
+        ${sourceQueries.join('\n        UNION ALL\n')}
+      )
+    )
+    SELECT timestamp, ${columns}
+    FROM sampled
+    WHERE rn = 1
+  `).bind(...bindValues).all();
 
   const result = rawResult.results.map(row => ({
     ...row,
