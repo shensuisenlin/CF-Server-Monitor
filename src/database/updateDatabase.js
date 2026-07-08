@@ -111,7 +111,8 @@ export async function addServerColumns(db) {
       collect_interval: "INTEGER DEFAULT 0",
       report_interval: "INTEGER DEFAULT 60",
       ping_mode: "TEXT DEFAULT 'http'",
-      traffic_calc_type: "TEXT DEFAULT 'total'"
+      traffic_calc_type: "TEXT DEFAULT 'total'",
+      history_partition_id: "INTEGER DEFAULT 0"
     };
     
     let added = 0;

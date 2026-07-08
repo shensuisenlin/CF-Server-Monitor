@@ -6,7 +6,8 @@ import {
   setMetricsHistoryCache,
   getCacheDuration
 } from '../utils/cache.js';
-import { saveSiteOptions, debug } from '../utils/settings.js';
+import { saveSiteOptions, debug, getSettingByKey } from '../utils/settings.js';
+import { ensureServerOptimization } from './indexOptimization.js';
 import { addHistoryColumns, ensureHistoryIndex } from './updateDatabase.js';
 
 let dbInitialized = false;
@@ -37,7 +38,8 @@ export async function initDatabase(db) {
         report_interval INTEGER DEFAULT 60,
         ping_mode TEXT DEFAULT 'http',
         is_hidden TEXT DEFAULT '0',
-        sort_order INTEGER DEFAULT 0
+        sort_order INTEGER DEFAULT 0,
+        history_partition_id INTEGER DEFAULT 0
       )
     `).run();
 
@@ -84,7 +86,14 @@ export async function initDatabase(db) {
       )
     `).run();
 
-    await ensureHistoryIndex(db);
+    if(!getSettingByKey(db, 'servers_optimized')) {
+      await ensureServerOptimization(db);
+      saveSiteOptions(db, 'servers_optimized', '1');
+    }
+
+    if(!getSettingByKey(db, 'history_id_optimized')) {
+      await ensureHistoryIndex(db);
+    }
 
     debug('✅ 数据库初始化完成');
     dbInitialized = true;
