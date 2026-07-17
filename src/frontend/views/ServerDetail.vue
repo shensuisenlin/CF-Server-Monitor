@@ -645,10 +645,10 @@ const updateChartsTheme = (theme) => {
 const { onThemeChange } = useTheme()
 onThemeChange(updateChartsTheme)
 
-// ≤1h: gap超过5分钟断线; >1h: 总时长/80，最低5分钟基础阈值
+// ≤1h: gap超过5分钟断线; >1h: 总时长/160，最低5分钟基础阈值
 const getHistoryGapBreakMs = (hours = currentHours.value) => {
   if (hours <= 1) return 5 * 60 * 1000
-  return Math.max(5 * 60 * 1000, Math.ceil(hours * 60 * 60 * 1000 / 80))
+  return Math.max(5 * 60 * 1000, Math.ceil(hours * 60 * 60 * 1000 / 160))
 }
 
 const shouldBreakGap = (prevPoint, nextPoint) => {

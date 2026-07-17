@@ -4,7 +4,7 @@
 
 **演示地址**：<https://demo.huilang.me/>
 
-**当前版本：V2.7.10**
+**当前版本：V2.7.11 Beta**
 
 > [!IMPORTANT]
 > V2.7.10 加入了 CSP 内容安全策略。默认只允许同源资源和必要的 Cloudflare/Google Fonts 资源；
@@ -24,6 +24,7 @@
 <details>
 <summary>更新记录</summary>
 
+- V2.7.11 Beta 优化客户端探针脚本，减少服务器流量消耗，添加GitHub自动同步功能，实现Workers自动升级。（本次更新需要手动升级agent安装脚本）
 - V2.7.10 加入了 CSP 内容安全策略。重构前端 admin 模块，新增 iOS Scriptable 小组件，新增 tags、note 字段
 - V2.7.9 修改数据库结构，减少一半D1写入消耗，理论上支持60+服务器监控，在保证安全的基础上，增加服务器参数下发功能。
 - V2.7.8 修复月度任务导致数据表索引丢失的严重 Bug
@@ -227,42 +228,6 @@ https://你的项目名.你的子域.workers.dev/#/admin
 3. 点击 **+ 添加服务器**
 4. 点击新服务器旁的 **📋** 按钮复制安装命令
 
-### Linux系统
-
-Ubuntu / Debian / CentOS / RHEL / Fedora / Rocky / AlmaLinux 系统
-
-```bash
-curl -sL https://你的项目.你的子域.workers.dev/install.sh | bash -s install -id=<SERVER_ID> -secret=<SECRET> -url=<WORKER_URL> [-collect_interval=0] [-interval=60] [-ping=http] [-ct=xxx] [-cu=xxx] [-cm=xxx] [-bd=xxx] [-reset_day=1] [-rx_correction=N] [-tx_correction=N]
-```
-
-Alpine 系统
-
-```bash
-curl -sL https://你的项目.你的子域.workers.dev/install-alpine.sh | sh -s install -id=<SERVER_ID> -secret=<SECRET> -url=<WORKER_URL> [-collect_interval=0] [-interval=60] [-ping=http] [-ct=xxx] [-cu=xxx] [-cm=xxx] [-bd=xxx] [-reset_day=1] [-rx_correction=N] [-tx_correction=N]
-```
-
-OpenWrt / LEDE / ImmortalWrt 系统
-
-```bash
-curl -sL https://你的项目.你的子域.workers.dev/install-openwrt.sh | sh -s install -id=<SERVER_ID> -secret=<SECRET> -url=<WORKER_URL> [-collect_interval=0] [-interval=60] [-ping=http] [-ct=xxx] [-cu=xxx] [-cm=xxx] [-bd=xxx] [-reset_day=1] [-rx_correction=N] [-tx_correction=N]
-```
-
-### macOS 系统安装
-
-支持 macOS Intel 和 Apple Silicon（M1/M2/M3/M4），使用 `sudo` 执行安装脚本：
-
-```bash
-curl -sL https://你的项目.你的子域.workers.dev/install-mac.sh | sudo bash -s install -id=<SERVER_ID> -secret=<SECRET> -url=<WORKER_URL> [-collect_interval=0] [-interval=60] [-ping=http] [-ct=xxx] [-cu=xxx] [-cm=xxx] [-bd=xxx] [-reset_day=1] [-rx_correction=N] [-tx_correction=N]
-```
-
-### Windows 系统安装
-
-```powershell
-irm https://你的项目.你的子域.workers.dev/cf-server-monitor.ps1 -OutFile cf-server-monitor.ps1; powershell -ExecutionPolicy Bypass -File .\cf-server-monitor.ps1 install -Id <SERVER_ID> -Secret <SECRET> -Url <WORKER_URL> [-ReportInterval=60] [-PingType=tcp] [-CtNode=xxx] [-CuNode=xxx] [-CmNode=xxx] [-BdNode=xxx] [-ResetDay=1]
-```
-
-***
-
 ### 参数说明
 
 | 参数                  | 说明                           | 默认值    |
@@ -290,21 +255,37 @@ irm https://你的项目.你的子域.workers.dev/cf-server-monitor.ps1 -OutFile
 
 根据您使用的安装方式，选择对应的升级方法：
 
-### 方式一：Cloudflare Workers 连接 GitHub 仓库
+### 方式一/方式二：Fork 后通过 GitHub 同步（推荐）
 
-由于 Cloudflare Workers 直接连接 GitHub 仓库，升级非常简单：
+无论你使用 Cloudflare Workers 连接 GitHub 仓库，还是使用 GitHub Action 自动部署，升级方式相同：同步上游仓库即可。
 
-1. 进入您 Fork 的 GitHub 仓库页面
+#### 自动同步（推荐）
+
+建议启用自动同步功能，系统会每天自动同步上游仓库的最新代码：
+
+1. 进入你 Fork 的 GitHub 仓库页面
+2. 点击 **Actions** 标签
+3. 首次使用时，点击 **"I understand my workflows, go ahead and enable them"** 启用 Actions
+4. 找到 **Upstream Sync** 工作流，点击进入
+5. 点击 **Run workflow** 手动触发一次，确认同步正常工作
+
+启用后，系统每天 UTC 0:00（北京时间 8:00）会自动检测上游仓库是否有新提交，有则自动合并到你的 `main` 分支。
+
+> **注意**：如果同步失败，提示"由于上游仓库的 workflow 文件变更，导致 GitHub 自动暂停了本次自动更新"，请前往仓库页面点击 **Sync Fork** → **Update branch** 手动执行一次同步，然后再次启用 Actions。
+
+#### 手动同步
+
+如果需要立即同步，可以手动操作：
+
+1. 进入你 Fork 的 GitHub 仓库页面
 2. 点击 **Sync fork** → **Update branch** 同步上游更新
-3. Cloudflare Workers 会自动检测到代码变更并重新部署
 
-### 方式二：GitHub Action 自动部署
+或者在 **Actions** 标签页中点击 **Upstream Sync** → **Run workflow** 手动触发。
 
-与方式一类似，同步上游仓库后推送即可：
+**部署触发方式**：
 
-1. 同步上游仓库（参考方式一的步骤）
-2. 推送代码后 GitHub Actions 会自动触发部署
-3. 在仓库的 **Actions** 标签页查看部署进度
+- **Cloudflare Workers 连接 GitHub 仓库**：同步后 Cloudflare 会自动检测到代码变更并重新部署
+- **GitHub Action 自动部署**：同步后 GitHub Actions 会自动触发部署，可在 **Actions** 标签页查看进度
 
 ### 方式三：一键部署
 
@@ -315,7 +296,7 @@ irm https://你的项目.你的子域.workers.dev/cf-server-monitor.ps1 -OutFile
 3. 在 build command 中填入 `npm run build:frontend`
 4. 点击部署
 
-> **注意**：一键部署方式不方便同步更新，建议迁移到方式一或方式二。
+> **注意**：一键部署方式不方便同步更新，建议迁移到方式一。
 
 </details>
 
@@ -754,7 +735,8 @@ CF-Server-Monitor/
 └── .github/
     └── workflows/
         ├── deploy.yml             # GitHub Actions 自动部署到 Workers
-        └── deploy-github-page.yml # GitHub Pages 自动部署
+        ├── deploy-github-page.yml # GitHub Pages 自动部署
+        └── sync.yml               # 上游仓库自动同步
 ```
 
 </details>
