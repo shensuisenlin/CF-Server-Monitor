@@ -1948,7 +1948,7 @@ body::before {
 }
 
 .cmd-output-wrapper {
-    display: flex;
+    display: none;
     align-items: flex-start;
     gap: 4px;
     background: var(--input-bg);
