@@ -1576,13 +1576,21 @@ body::before {
     background: var(--bg-secondary);
     border: 1px solid var(--border-active);
     border-radius: 6px;
-    width: 480px;
+    width: 680px;
     max-width: 90%;
     max-height: 90vh;
     padding: 24px;
     position: relative;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     overflow-y: auto;
+}
+
+.auto-update-warning-modal {
+    z-index: 1010;
+}
+
+.auto-update-warning-modal .modal-dialog {
+    width: 560px;
 }
 
 .modal-header {
@@ -1937,6 +1945,98 @@ body::before {
 
 .cmd-input-wrapper.copied .cmd-input {
     color: var(--accent-green);
+}
+
+.cmd-output-wrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+    padding: 6px 10px;
+}
+
+.cmd-output {
+    flex: 1;
+    margin: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-family: var(--terminal-font);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.cmd-output-wrapper.copied {
+    border-color: var(--accent-green);
+    box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.15);
+}
+
+.cmd-output-wrapper.copied .cmd-prompt,
+.cmd-output-wrapper.copied .cmd-output {
+    color: var(--accent-green);
+}
+
+.config-list {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bg-card);
+}
+
+.config-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.config-row:last-child {
+    border-bottom: none;
+}
+
+.config-label {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.config-value {
+    color: var(--text-primary);
+    text-align: right;
+    word-break: break-word;
+    min-width: 0;
+    flex: 1;
+}
+
+.config-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.config-badge.is-enabled {
+    background: rgba(0, 212, 170, 0.12);
+    color: var(--accent-green);
+    border: 1px solid rgba(0, 212, 170, 0.2);
+}
+
+.config-badge.is-disabled {
+    background: rgba(248, 81, 73, 0.12);
+    color: var(--accent-red);
+    border: 1px solid rgba(248, 81, 73, 0.2);
 }
 
 /* --------------------------------------------------------------------------
@@ -2958,6 +3058,15 @@ body::before {
     .settings-section .flex[style*="gap"] .form-input,
     .settings-section .flex[style*="gap"] > * {
         width: 100%;
+    }
+
+    .config-row {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .config-value {
+        text-align: left;
     }
 
     .tab-content .text-right {

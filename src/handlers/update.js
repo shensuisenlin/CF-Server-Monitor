@@ -3,14 +3,17 @@ import { getServerDetail, clearServerDetailCache } from '../utils/cache.js';
 import { mergeMetricsIntoServer } from '../utils/metrics.js';
 import { createErrorResponse, createUnauthorizedResponse, createNotFoundResponse, createBadRequestResponse } from '../utils/errors.js';
 import { ensureServerOptimization } from '../database/indexOptimization.js';
-import { loadSiteSettings } from '../utils/settings.js';
+import { AGENT_VERSION, loadSiteSettings } from '../utils/settings.js';
 import {
   AGENT_CONFIG_MD5_HEADER,
   AGENT_CONFIG_SCHEMA_HEADER,
   AGENT_CONFIG_SCHEMA_VERSION,
+  appendAgentUpdateParam,
   describeAgentConfig,
+  isAgentAutoUpdateEnabled,
   isValidTrafficCorrection,
-  serializeCorrection
+  serializeCorrection,
+  shouldSendAgentUpdate
 } from '../utils/agentConfig.js';
 
 // 将最新一次上报打包成前端可直接消费的 "当前状态" 对象
@@ -47,6 +50,16 @@ function normalizeAgentVersion(value) {
     .trim()
     .replace(/[^0-9A-Za-z.+_-]/g, '')
     .slice(0, 64);
+}
+
+function createAgentInstructionResponse(body) {
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8'
+    }
+  });
 }
 
 function logUpdateBadRequest(reason, details = {}) {
@@ -232,8 +245,18 @@ export async function handleUpdate(request, env, ctx) {
     queueBroadcastSamples(id, broadcastSamples);
     ctx.waitUntil(_ensureBatchFlush(env));
 
+    let shouldUpdateAgent = false;
+    const autoUpdateRequested = isAgentAutoUpdateEnabled(serverDetail.auto_update) && !!agentVersion;
+    if (autoUpdateRequested) {
+      const targetAgentVersion = normalizeAgentVersion(AGENT_VERSION || '');
+      shouldUpdateAgent = shouldSendAgentUpdate(agentVersion, targetAgentVersion);
+    }
+
     const clientConfigSchema = request.headers.get(AGENT_CONFIG_SCHEMA_HEADER);
     if (clientConfigSchema !== String(AGENT_CONFIG_SCHEMA_VERSION)) {
+      if (shouldUpdateAgent) {
+        return createAgentInstructionResponse('update=1');
+      }
       return new Response('OK', {
         status: 200,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' }
@@ -253,6 +276,9 @@ export async function handleUpdate(request, env, ctx) {
       };
 
       if (!md5Changed && !hasCorrection) {
+        if (shouldUpdateAgent) {
+          return createAgentInstructionResponse('update=1');
+        }
         return new Response(null, { status: 204, headers: responseHeaders });
       }
 
@@ -260,6 +286,7 @@ export async function handleUpdate(request, env, ctx) {
       if (hasCorrection) {
         body += serializeCorrection(descriptor.correction);
       }
+      body = appendAgentUpdateParam(body, shouldUpdateAgent);
 
       return new Response(body, {
         status: 200,
@@ -270,6 +297,9 @@ export async function handleUpdate(request, env, ctx) {
       });
     } catch (configError) {
       console.warn('[Update] Failed to build agent configuration:', configError?.message || configError);
+      if (shouldUpdateAgent) {
+        return createAgentInstructionResponse('update=1');
+      }
       return new Response('OK', {
         status: 200,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' }

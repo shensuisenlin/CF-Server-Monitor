@@ -12,6 +12,10 @@ import { isValidTrafficCorrection, validateAgentConfigInput, validatePingNode } 
 
 const PING_NODE_FIELDS = ['custom_ct', 'custom_cu', 'custom_cm', 'custom_bd'];
 
+function normalizeBooleanFlag(value) {
+  return value === true || value === 1 || value === '1' || value === 'true' ? '1' : '0';
+}
+
 function isValidUUID(id) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
@@ -481,7 +485,7 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
       });
     }
     else if (data.action === 'edit') {
-      const { id, name, server_group, tags, note, price, expire_date, traffic_limit, traffic_calc_type, reset_day, collect_interval, report_interval, custom_ct, custom_cu, custom_cm, custom_bd, rx_correction, tx_correction, offline_notify_disabled, is_hidden } = data;
+      const { id, name, server_group, tags, note, price, expire_date, traffic_limit, traffic_calc_type, reset_day, collect_interval, report_interval, auto_update, custom_ct, custom_cu, custom_cm, custom_bd, rx_correction, tx_correction, offline_notify_disabled, is_hidden } = data;
       if (!id || !isValidUUID(id)) {
         return createBadRequestResponse('invalidServerId');
       }
@@ -520,7 +524,7 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
       try {
         await env.DB.prepare(`
           UPDATE servers
-          SET name = ?, server_group = ?, tags = ?, note = ?, price = ?, expire_date = ?, traffic_limit = ?, traffic_calc_type = ?, reset_day = ?, collect_interval = ?, report_interval = ?, custom_ct = ?, custom_cu = ?, custom_cm = ?, custom_bd = ?, rx_correction = ?, tx_correction = ?, offline_notify_disabled = ?, is_hidden = ?
+          SET name = ?, server_group = ?, tags = ?, note = ?, price = ?, expire_date = ?, traffic_limit = ?, traffic_calc_type = ?, reset_day = ?, collect_interval = ?, report_interval = ?, auto_update = ?, custom_ct = ?, custom_cu = ?, custom_cm = ?, custom_bd = ?, rx_correction = ?, tx_correction = ?, offline_notify_disabled = ?, is_hidden = ?
           WHERE id = ?
         `).bind(
           name || '',
@@ -534,14 +538,15 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
           normalizedAgentConfig.reset_day,
           normalizedAgentConfig.collect_interval,
           normalizedAgentConfig.report_interval,
+          normalizeBooleanFlag(auto_update),
           pingNodes.values.custom_ct,
           pingNodes.values.custom_cu,
           pingNodes.values.custom_cm,
           pingNodes.values.custom_bd,
           safeRx,
           safeTx,
-          offline_notify_disabled || '0',
-          is_hidden || '0',
+          normalizeBooleanFlag(offline_notify_disabled),
+          normalizeBooleanFlag(is_hidden),
           id
         ).run();
       } catch (e) {

@@ -132,6 +132,15 @@
       <div class="form-row">
         <div class="form-group">
           <div class="checkbox-item no-margin">
+            <input type="checkbox" :checked="editForm.auto_update" @change="handleAutoUpdateChange">
+            <label>
+              <b>{{ trans.autoUpdate }}</b>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="checkbox-item no-margin">
             <input type="checkbox" v-model="editForm.is_hidden">
             <label>
               <b>{{ trans.hideFromPublic }}</b><br>
@@ -185,5 +194,13 @@ const pingNodeErrors = computed(() => Object.fromEntries(
 
 const hasPingNodeErrors = computed(() => Object.values(pingNodeErrors.value).some(Boolean))
 
-defineEmits(['save', 'close'])
+const emit = defineEmits(['save', 'close', 'toggle-auto-update'])
+
+const handleAutoUpdateChange = (event) => {
+  const nextValue = event.target.checked
+  if (nextValue) {
+    event.target.checked = false
+  }
+  emit('toggle-auto-update', nextValue)
+}
 </script>

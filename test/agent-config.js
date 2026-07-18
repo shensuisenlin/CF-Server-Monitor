@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
+  appendAgentUpdateParam,
   buildAgentConfig,
   describeAgentConfig,
+  isAgentAutoUpdateEnabled,
   isValidTrafficCorrection,
   serializeAgentConfig,
   serializeCorrection,
+  shouldSendAgentUpdate,
   validateAgentConfigInput,
   validatePingNode
 } from '../src/utils/agentConfig.js';
@@ -20,11 +23,26 @@ const expected = 'collect_interval=1&report_interval=60&reset_day=15&schema_vers
 
 const config = buildAgentConfig(server);
 assert.equal(serializeAgentConfig(config), expected);
+assert.equal(appendAgentUpdateParam(expected, true), `${expected}&update=1`);
+assert.equal(appendAgentUpdateParam('', true), 'update=1');
+assert.equal(appendAgentUpdateParam(expected, false), expected);
+assert.equal(isAgentAutoUpdateEnabled('1'), true);
+assert.equal(isAgentAutoUpdateEnabled(1), true);
+assert.equal(isAgentAutoUpdateEnabled('true'), false);
+assert.equal(shouldSendAgentUpdate('1.3.0', '1.3.0'), false);
+assert.equal(shouldSendAgentUpdate('v1.3.0', '1.3.0'), false);
+assert.equal(shouldSendAgentUpdate('1.2.9', '1.3.0'), true);
+assert.equal(shouldSendAgentUpdate('', '1.3.0'), false);
+assert.equal(shouldSendAgentUpdate('1.3.0', ''), false);
 
 const descriptor = await describeAgentConfig(server);
 assert.equal(descriptor.serialized, expected);
 assert.equal(descriptor.md5, createHash('md5').update(expected).digest('hex'));
 assert.equal(descriptor.correction, null);
+
+const autoUpdateDescriptor = await describeAgentConfig({ ...server, auto_update: '1' });
+assert.equal(autoUpdateDescriptor.serialized, expected);
+assert.equal(autoUpdateDescriptor.md5, descriptor.md5);
 
 const correctionDescriptor = await describeAgentConfig({ ...server, rx_correction: null, tx_correction: 5 });
 assert.deepEqual(correctionDescriptor.correction, {

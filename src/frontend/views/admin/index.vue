@@ -155,7 +155,32 @@
         :settings="settings"
         @save="saveEdit"
         @close="closeEditModal"
+        @toggle-auto-update="handleAutoUpdateToggle"
       />
+
+      <div v-if="showAutoUpdateWarning" id="autoUpdateWarningModal" class="modal-overlay auto-update-warning-modal active">
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <div class="modal-title">{{ trans.autoUpdateRiskTitle }}</div>
+            <button class="modal-close" @click="cancelAutoUpdateWarning">✕</button>
+          </div>
+
+          <div class="danger-box mb-4">
+            <div class="flex-center-gap-sm mb-2">
+              <span class="danger-icon text-xl">⚠️</span>
+              <span class="danger-label">{{ trans.autoUpdateRiskTitle }}</span>
+            </div>
+            <p class="text-secondary text-sm line-height-1-6">
+              {{ trans.autoUpdateRiskDesc }}
+            </p>
+          </div>
+
+          <div class="modal-footer flex-justify-between">
+            <button @click="confirmAutoUpdateWarning" class="btn btn-primary">{{ trans.autoUpdateRiskConfirm }}</button>
+            <button @click="cancelAutoUpdateWarning" class="btn">{{ trans.autoUpdateRiskCancel }}</button>
+          </div>
+        </div>
+      </div>
 
       <DeleteServerModal
         :trans="trans"
@@ -185,6 +210,7 @@
         :reset-day="resetDay"
         :rx-correction="rxCorrection"
         :tx-correction="txCorrection"
+        :auto-update="autoUpdate"
         :install-command="getCustomInstallCommand()"
         :copied-cmd="copiedCmd"
         @close="closeCopyModal"
@@ -559,6 +585,7 @@ const editForm = ref({
   custom_bd: '',
   rx_correction: '',
   tx_correction: '',
+  auto_update: false,
   is_hidden: false,
   offline_notify_disabled: false
 })
@@ -580,6 +607,8 @@ const d1UsageLoading = ref(false)
 const d1UsageResult = ref(null)
 const validationError = ref(null)
 const alertMessage = ref(null)
+const showAutoUpdateWarning = ref(false)
+const autoUpdatePendingEnable = ref(false)
 
 const testNotificationLoading = ref(false)
 
@@ -600,6 +629,7 @@ const customBd = ref('')
 const resetDay = ref(1)
 const rxCorrection = ref('')
 const txCorrection = ref('')
+const autoUpdate = ref(false)
 const copiedCmd = ref(false)
 
 const getPingNodeLabel = (field) => ({
@@ -1033,6 +1063,7 @@ const copyCmd = (serverId) => {
   resetDay.value = server?.reset_day ?? 1
   rxCorrection.value = server?.rx_correction ?? ''
   txCorrection.value = server?.tx_correction ?? ''
+  autoUpdate.value = server?.auto_update === '1' || server?.auto_update === 1 || server?.auto_update === true
   copiedCmd.value = false
   showCopyModal.value = true
 }
@@ -1041,6 +1072,7 @@ const hasCorrectionValue = (value) => value !== null && value !== undefined && v
 
 const getCustomInstallCommand = () => {
   const HOST = selectedApiBase.value
+  const autoUpdateFlag = autoUpdate.value ? 1 : 0
   if (targetOs.value === 'windows') {
     const params = [
       'install',
@@ -1049,7 +1081,8 @@ const getCustomInstallCommand = () => {
       `-Url '${HOST}/update'`,
       `-CollectInterval ${collectInterval.value}`,
       `-ReportInterval ${reportInterval.value}`,
-      `-ResetDay ${resetDay.value ?? 1}`
+      `-ResetDay ${resetDay.value ?? 1}`,
+      `-AutoUpdate ${autoUpdateFlag}`
     ]
     if (customCt.value) params.push(`-CtNode '${customCt.value}'`)
     if (customCu.value) params.push(`-CuNode '${customCu.value}'`)
@@ -1065,7 +1098,7 @@ const getCustomInstallCommand = () => {
     : targetOs.value === 'openwrt' ? 'install-openwrt.sh'
     : targetOs.value === 'mac' ? 'install-mac.sh'
     : 'install.sh'
-  let cmd = `curl -sL ${HOST}/${script} | ${sudoPrefix}${shell} -s install -id=${copyServerId.value} -secret='${apiSecret.value}' -url=${HOST}/update -collect_interval=${collectInterval.value} -interval=${reportInterval.value} -reset_day=${resetDay.value ?? 1}`
+  let cmd = `curl -sL ${HOST}/${script} | ${sudoPrefix}${shell} -s install -id=${copyServerId.value} -secret='${apiSecret.value}' -url=${HOST}/update -collect_interval=${collectInterval.value} -interval=${reportInterval.value} -reset_day=${resetDay.value ?? 1} -auto_update=${autoUpdateFlag}`
   if (customCt.value) cmd += ` -ct=${customCt.value}`
   if (customCu.value) cmd += ` -cu=${customCu.value}`
   if (customCm.value) cmd += ` -cm=${customCm.value}`
@@ -1135,6 +1168,7 @@ const openEditModal = (server) => {
     custom_bd: server.custom_bd || '',
     rx_correction: server.rx_correction ?? '',
     tx_correction: server.tx_correction ?? '',
+    auto_update: server.auto_update === '1' || server.auto_update === 1 || server.auto_update === true,
     is_hidden: server.is_hidden === '1',
     offline_notify_disabled: server.offline_notify_disabled === '1'
   }
@@ -1143,7 +1177,31 @@ const openEditModal = (server) => {
 }
 
 const closeEditModal = () => {
+  cancelAutoUpdateWarning()
   showEditModal.value = false
+}
+
+const handleAutoUpdateToggle = (nextValue) => {
+  if (!nextValue) {
+    editForm.value.auto_update = false
+    cancelAutoUpdateWarning()
+    return
+  }
+  autoUpdatePendingEnable.value = true
+  showAutoUpdateWarning.value = true
+}
+
+const confirmAutoUpdateWarning = () => {
+  if (autoUpdatePendingEnable.value) {
+    editForm.value.auto_update = true
+  }
+  autoUpdatePendingEnable.value = false
+  showAutoUpdateWarning.value = false
+}
+
+const cancelAutoUpdateWarning = () => {
+  autoUpdatePendingEnable.value = false
+  showAutoUpdateWarning.value = false
 }
 
 const saveEdit = async () => {
@@ -1175,6 +1233,7 @@ const saveEdit = async () => {
     custom_bd: pingNodeValidation.values.custom_bd,
     rx_correction: editForm.value.rx_correction,
     tx_correction: editForm.value.tx_correction,
+    auto_update: editForm.value.auto_update ? '1' : '0',
     is_hidden: editForm.value.is_hidden ? '1' : '0',
     offline_notify_disabled: editForm.value.offline_notify_disabled ? '1' : '0'
   }
@@ -1183,6 +1242,7 @@ const saveEdit = async () => {
     const result = await adminApiForSite(data)
     if (!result.error) {
       saveResult.value = { success: true, message: getMessage(result.data.message) || trans.value.serverEdited }
+      cancelAutoUpdateWarning()
       showEditModal.value = false
       loadServers()
     } else {
