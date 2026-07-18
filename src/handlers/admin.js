@@ -8,7 +8,9 @@ import { AppError, createSuccessResponse, createBadRequestResponse, createUnauth
 import { addServerColumns } from '../database/updateDatabase.js';
 import { sendNotification } from '../services/notification.js';
 import { getNextServerHistoryPartitionId } from '../database/indexOptimization.js';
-import { isValidTrafficCorrection, validateAgentConfigInput } from '../utils/agentConfig.js';
+import { isValidTrafficCorrection, validateAgentConfigInput, validatePingNode } from '../utils/agentConfig.js';
+
+const PING_NODE_FIELDS = ['custom_ct', 'custom_cu', 'custom_cm', 'custom_bd'];
 
 function isValidUUID(id) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -41,6 +43,18 @@ function normalizeCspOrigin(value) {
   } catch (_) {
     return '';
   }
+}
+
+function normalizePingNodeFields(source, fields = PING_NODE_FIELDS) {
+  const values = {};
+  for (const field of fields) {
+    const result = validatePingNode(source?.[field]);
+    if (!result.valid) {
+      return { valid: false, field };
+    }
+    values[field] = result.value;
+  }
+  return { valid: true, values };
 }
 
 async function deleteServer(db, id) {
@@ -178,7 +192,7 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
       const { username, password } = data;
       
       if (!username || !password) {
-        return createBadRequestResponse('Missing username or password');
+        return createBadRequestResponse('missingCredentials');
       }
 
       const turnstileEnabled = sys && (sys.turnstile_enabled === 'true' || sys.turnstile_enabled === true);
@@ -190,7 +204,7 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
         const isTurnstileVerified = await verifyTurnstileToken(turnstileToken, turnstileSecretKey);
         
         if (!isTurnstileVerified) {
-          return createErrorResponse(new AppError('Turnstile verification failed', 403));
+          return createErrorResponse(new AppError('verificationFailed', 403));
         }
       }
 
@@ -204,7 +218,7 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
       const credentialResult = await validateCredentials(mockRequest, env, sys);
       
       if (!credentialResult.valid) {
-        return createUnauthorizedResponse('Invalid username or password');
+        return createUnauthorizedResponse('invalidCredentials');
       }
 
       if (credentialResult.needsPasswordUpgrade) {
@@ -275,6 +289,7 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
           item.cpu_info = '';
           item.arch = '';
           item.os = '';
+          item.agent_version = '';
           item.ip_v4 = '0';
           item.ip_v6 = '0';
           item.boot_time = '';
@@ -332,7 +347,8 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
         const testMsg = `✅ **测试通知**\n\n这是一条来自 CF Server Monitor 的测试消息。\n\n**时间:** ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`;
         const result = await sendNotification({ tg_bot_token, tg_chat_id: tg_chat_id || '' }, testMsg);
         if(result) {
-          return createBadRequestResponse(result);
+          console.warn('Test notification failed:', result);
+          return createBadRequestResponse('testNotificationFailed');
         }
         return createSuccessResponse({ success: true, message: 'testNotificationSent' });
       } catch (e) {
@@ -345,18 +361,23 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
       // 如果 turnstile_enabled 或 turnstile_login_enabled 开启，验证 turnstile_site_key 和 turnstile_secret_key 都不为空
       if (settings.turnstile_enabled === 'true' || settings.turnstile_enabled === true || settings.turnstile_login_enabled === 'true' || settings.turnstile_login_enabled === true) {
         if (!settings.turnstile_site_key || settings.turnstile_site_key.trim().length === 0) {
-          return createBadRequestResponse('Turnstile Site Key is required when Turnstile is enabled');
+          return createBadRequestResponse('turnstileSiteKeyRequired');
         }
         if (!settings.turnstile_secret_key || settings.turnstile_secret_key.trim().length === 0) {
-          return createBadRequestResponse('Turnstile Secret Key is required when Turnstile is enabled');
+          return createBadRequestResponse('turnstileSecretKeyRequired');
         }
       }
 
       // 如果 tg_notify 或 expire_reminder 开启，验证 tg_bot_token 不为空
       if (settings.tg_notify === 'true' || settings.expire_reminder === 'true') {
         if (!settings.tg_bot_token || settings.tg_bot_token.trim().length === 0) {
-          return createBadRequestResponse('Telegram Bot Token is required when notifications are enabled');
+          return createBadRequestResponse('tgBotTokenRequired');
         }
+      }
+
+      const pingNodes = normalizePingNodeFields(settings);
+      if (!pingNodes.valid) {
+        return createBadRequestResponse('invalidPingNodeFormat');
       }
 
       const appearanceOptions = {};
@@ -382,6 +403,8 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
             if (settings[field] && settings[field].length > 0) {
               siteOptions[field] = await hashPassword(settings[field]);
             }
+          } else if (PING_NODE_FIELDS.includes(field)) {
+            siteOptions[field] = pingNodes.values[field];
           } else {
             siteOptions[field] = settings[field];
           }
@@ -472,14 +495,10 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
       }
       const normalizedAgentConfig = agentConfigResult.config;
 
-      const sanitizePing = (v) => {
-        if (v === null || v === undefined) return '';
-        return String(v).replace(/[^a-zA-Z0-9.\-_]/g, '').slice(0, 50);
-      };
-      const safeCustomCt = sanitizePing(custom_ct);
-      const safeCustomCu = sanitizePing(custom_cu);
-      const safeCustomCm = sanitizePing(custom_cm);
-      const safeCustomBd = sanitizePing(custom_bd);
+      const pingNodes = normalizePingNodeFields({ custom_ct, custom_cu, custom_cm, custom_bd });
+      if (!pingNodes.valid) {
+        return createBadRequestResponse('invalidPingNodeFormat');
+      }
       const safeTags = String(tags || '')
         .split(',')
         .map(tag => tag.trim().replace(/[^\p{L}\p{N} ._\-]/gu, '').slice(0, 32))
@@ -515,10 +534,10 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
           normalizedAgentConfig.reset_day,
           normalizedAgentConfig.collect_interval,
           normalizedAgentConfig.report_interval,
-          safeCustomCt,
-          safeCustomCu,
-          safeCustomCm,
-          safeCustomBd,
+          pingNodes.values.custom_ct,
+          pingNodes.values.custom_cu,
+          pingNodes.values.custom_cm,
+          pingNodes.values.custom_bd,
           safeRx,
           safeTx,
           offline_notify_disabled || '0',

@@ -34,7 +34,7 @@
             <span class="prompt">$</span> {{ trans.sudoStatus }}
           </div>
           <div class="header-actions">
-            <button @click="loadServers" class="btn" :disabled="adminSiteLoading">↻ {{ trans.refresh }}</button>
+            <button @click="refreshServers" class="btn" :disabled="adminSiteLoading">↻ {{ trans.refresh }}</button>
             <select
               v-if="isMultipleMode"
               v-model.number="selectedApiIndex"
@@ -103,6 +103,7 @@
           :groups="groups"
           :active-tab="activeTab"
           :selected-api-index="selectedApiIndex"
+          :latest-agent-version="latestAgentVersion"
           :copied-server-id="copiedServerId"
           :copied-note-server-id="copiedNoteServerId"
           @add-server="addServer"
@@ -417,9 +418,10 @@ import DatabasePanel from './components/DatabasePanel.vue'
 import EditServerModal from './components/EditServerModal.vue'
 import DeleteServerModal from './components/DeleteServerModal.vue'
 import CopyCommandModal from './components/CopyCommandModal.vue'
-import { adminApi, login, logout as apiLogout, upgradeDatabase, clearHistory, getApiBases } from '../../utils/api'
+import { adminApi, login, logout as apiLogout, upgradeDatabase, clearHistory, getApiBases, fetchConfig } from '../../utils/api'
 import { hasMultipleApiBases } from '../../utils/config.js'
 import { t, useTranslation } from '../../utils/i18n'
+import { PING_NODE_FIELDS, validatePingNode } from '../../utils/pingNode.js'
 import { usePasswordVisibility } from '../../composables/usePasswordVisibility'
 import { useTurnstile } from './composables/useTurnstile'
 
@@ -476,6 +478,7 @@ const servers = ref([])
 const selectedServers = ref([])
 const stats = ref({ total: '-', online: 0, offline: 0, avg_cpu: 0 })
 const groups = ref(['Default'])
+const latestAgentVersion = ref('')
 const newServerName = ref('')
 const newServerGroup = ref('')
 
@@ -599,6 +602,27 @@ const rxCorrection = ref('')
 const txCorrection = ref('')
 const copiedCmd = ref(false)
 
+const getPingNodeLabel = (field) => ({
+  custom_ct: trans.value.customCt,
+  custom_cu: trans.value.customCu,
+  custom_cm: trans.value.customCm,
+  custom_bd: trans.value.customBd
+})[field] || field
+
+const getPingNodeValidation = (source) => {
+  const values = {}
+  for (const field of PING_NODE_FIELDS) {
+    const result = validatePingNode(source[field])
+    if (!result.valid) {
+      return { valid: false, field }
+    }
+    values[field] = result.value
+  }
+  return { valid: true, values }
+}
+
+const buildPingNodeError = (field) => `${getPingNodeLabel(field)}: ${trans.value.invalidPingNodeFormat}`
+
 const copyTextToClipboard = async (text) => {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     try {
@@ -659,8 +683,11 @@ const handleLogin = async () => {
     syncApiIndexQuery()
     clearTurnstile()
     turnstileVerified.value = hasSharedTurnstileVerified()
-    loadSettings()
-    loadServers()
+    await Promise.all([
+      loadSettings(),
+      loadServers(),
+      loadLatestAgentVersion()
+    ])
   } else {
     loginError.value = result.status === 403 ? 'Please complete the verification' : trans.value.errorInvalidUsername
     loginForm.value.password = ''
@@ -673,6 +700,7 @@ const handleLogin = async () => {
 const logout = async () => {
   apiLogout()
   isLoggedIn.value = false
+  latestAgentVersion.value = ''
   clearTurnstile()
   await loadTurnstileConfig()
 }
@@ -691,8 +719,11 @@ const initAdmin = async () => {
     if (savedTurnstileToken) {
       turnstileToken.value = savedTurnstileToken
     }
-    loadSettings()
-    loadServers()
+    await Promise.all([
+      loadSettings(),
+      loadServers(),
+      loadLatestAgentVersion()
+    ])
   } else {
     await loadTurnstileConfig()
   }
@@ -728,7 +759,8 @@ const switchAdminSite = async () => {
   try {
     await Promise.all([
       loadSettings(),
-      loadServers()
+      loadServers(),
+      loadLatestAgentVersion()
     ])
   } finally {
     adminSiteLoading.value = false
@@ -738,6 +770,16 @@ const switchAdminSite = async () => {
 const handleAdminApiIndexChange = async () => {
   syncApiIndexQuery()
   await switchAdminSite()
+}
+
+const loadLatestAgentVersion = async () => {
+  try {
+    const config = await fetchConfig(selectedApiIndex.value)
+    latestAgentVersion.value = config?.last_agent_version || ''
+  } catch (e) {
+    console.error('[ERROR] Load latest agent version failed:', e)
+    latestAgentVersion.value = ''
+  }
 }
 
 const loadSettings = async () => {
@@ -789,6 +831,8 @@ const loadSettings = async () => {
 const saveSettings = async () => {
   if (saving.value) return
 
+  validationError.value = null
+
   const jwtSecret = settings.value.jwt_secret
   if (jwtSecret && jwtSecret.length > 0 && jwtSecret.length < 32) {
     validationError.value = trans.value.jwtSecretMinLength
@@ -835,6 +879,12 @@ const saveSettings = async () => {
     }
   }
 
+  const pingNodeValidation = getPingNodeValidation(settings.value)
+  if (!pingNodeValidation.valid) {
+    validationError.value = buildPingNodeError(pingNodeValidation.field)
+    return
+  }
+
   if (settingsPanelRef.value) {
     const cspStaticValid = settingsPanelRef.value.validateCspField('csp_static')
     const cspApiValid = settingsPanelRef.value.validateCspField('csp_api')
@@ -870,10 +920,10 @@ const saveSettings = async () => {
       cloudflare_account_id: settings.value.cloudflare_account_id,
       cloudflare_token: settings.value.cloudflare_token,
       username: settings.value.username,
-      custom_ct: settings.value.custom_ct,
-      custom_cu: settings.value.custom_cu,
-      custom_cm: settings.value.custom_cm,
-      custom_bd: settings.value.custom_bd,
+      custom_ct: pingNodeValidation.values.custom_ct,
+      custom_cu: pingNodeValidation.values.custom_cu,
+      custom_cm: pingNodeValidation.values.custom_cm,
+      custom_bd: pingNodeValidation.values.custom_bd,
       csp_static: settings.value.csp_static || '',
       csp_api: settings.value.csp_api || ''
     }
@@ -919,6 +969,13 @@ const loadServers = async () => {
   } catch (e) {
     console.error('[ERROR] Load servers failed:', e)
   }
+}
+
+const refreshServers = async () => {
+  await Promise.all([
+    loadServers(),
+    loadLatestAgentVersion()
+  ])
 }
 
 const addServer = async () => {
@@ -1090,6 +1147,14 @@ const closeEditModal = () => {
 }
 
 const saveEdit = async () => {
+  validationError.value = null
+
+  const pingNodeValidation = getPingNodeValidation(editForm.value)
+  if (!pingNodeValidation.valid) {
+    validationError.value = buildPingNodeError(pingNodeValidation.field)
+    return
+  }
+
   const data = {
     action: 'edit',
     id: editForm.value.id,
@@ -1104,10 +1169,10 @@ const saveEdit = async () => {
     reset_day: editForm.value.reset_day,
     collect_interval: editForm.value.collect_interval,
     report_interval: editForm.value.report_interval,
-    custom_ct: editForm.value.custom_ct,
-    custom_cu: editForm.value.custom_cu,
-    custom_cm: editForm.value.custom_cm,
-    custom_bd: editForm.value.custom_bd,
+    custom_ct: pingNodeValidation.values.custom_ct,
+    custom_cu: pingNodeValidation.values.custom_cu,
+    custom_cm: pingNodeValidation.values.custom_cm,
+    custom_bd: pingNodeValidation.values.custom_bd,
     rx_correction: editForm.value.rx_correction,
     tx_correction: editForm.value.tx_correction,
     is_hidden: editForm.value.is_hidden ? '1' : '0',

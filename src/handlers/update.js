@@ -15,11 +15,12 @@ import {
 
 // 将最新一次上报打包成前端可直接消费的 "当前状态" 对象
 // 与 /api/server 和 /api/servers 返回的字段保持一致，便于页面直接合并
-function buildPayloadForBroadcast(id, metrics, extra = {}) {
+function buildPayloadForBroadcast(id, metrics = {}, extra = {}) {
   const payload = {};
   mergeMetricsIntoServer(payload, metrics);
   payload.id = id;
   payload.region = extra.region || '';
+  payload.agent_version = extra.agentVersion || metrics.agent_version || '';
   payload.last_updated = extra.timestamp || metrics.timestamp || Date.now();
   payload.timestamp = payload.last_updated;
   return payload;
@@ -38,6 +39,14 @@ function normalizeTimestamp(value, fallback = Date.now()) {
   const ts = Number(value);
   if (!Number.isFinite(ts) || ts <= 0) return fallback;
   return ts < 10000000000 ? ts * 1000 : ts;
+}
+
+function normalizeAgentVersion(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .trim()
+    .replace(/[^0-9A-Za-z.+_-]/g, '')
+    .slice(0, 64);
 }
 
 function logUpdateBadRequest(reason, details = {}) {
@@ -74,10 +83,11 @@ function normalizeMetricSamples(data) {
   return samples.slice(-MAX_BATCH_SAMPLES);
 }
 
-function toBroadcastSamples(id, samples, regionCode) {
+function toBroadcastSamples(id, samples, regionCode, agentVersion = '') {
   return samples.map(sample => {
     const payload = buildPayloadForBroadcast(id, sample.metrics || {}, {
       region: regionCode,
+      agentVersion,
       timestamp: sample.ts
     });
     const filtered = Object.assign({}, payload);
@@ -149,6 +159,7 @@ export async function handleUpdate(request, env, ctx) {
     }
 
     let regionCode = request.cf?.country || request.headers?.get('cf-ipcountry') || '';
+    const agentVersion = normalizeAgentVersion(request.headers.get('X-Agent-Version'));
 
     const serverDetail = await getServerDetail(env.DB, id, true);
 
@@ -206,9 +217,17 @@ export async function handleUpdate(request, env, ctx) {
 
     // 获取最后一条插入（如果是批量数据，取最后一个样本）
     const latestSample = samples[samples.length - 1];
-    await saveMetricsHistory(env.DB, id, historyPartitionId, latestSample.metrics, regionCode, latestSample.ts);
+    await saveMetricsHistory(
+      env.DB,
+      id,
+      historyPartitionId,
+      latestSample.metrics,
+      regionCode,
+      latestSample.ts,
+      agentVersion
+    );
 
-    const broadcastSamples = toBroadcastSamples(id, samples, regionCode);
+    const broadcastSamples = toBroadcastSamples(id, samples, regionCode, agentVersion);
     // 加入批量队列，由后台定时任务统一推送到 DO
     queueBroadcastSamples(id, broadcastSamples);
     ctx.waitUntil(_ensureBatchFlush(env));

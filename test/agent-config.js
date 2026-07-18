@@ -6,7 +6,8 @@ import {
   isValidTrafficCorrection,
   serializeAgentConfig,
   serializeCorrection,
-  validateAgentConfigInput
+  validateAgentConfigInput,
+  validatePingNode
 } from '../src/utils/agentConfig.js';
 import { md5Hash } from '../src/utils/common.js';
 
@@ -73,6 +74,14 @@ assert.equal(resolvedConfig.custom_ct, 'ct-server.example.com');
 assert.equal(resolvedConfig.custom_cu, 'cu-global.example.com');
 assert.equal(resolvedConfig.custom_cm, 'cm-global.example.com');
 assert.equal(resolvedConfig.custom_bd, 'bd-global.example.com');
-assert.equal(buildAgentConfig({ custom_ct: 'a'.repeat(100) }).custom_ct.length, 50);
+assert.equal(buildAgentConfig({ custom_ct: 'gd-ct-v4.ip.zstaticcdn.com:80' }).custom_ct, 'gd-ct-v4.ip.zstaticcdn.com:80');
+assert.equal(buildAgentConfig({ custom_ct: 'GD-CT-V4.IP.ZSTATICCDN.COM:080' }).custom_ct, 'gd-ct-v4.ip.zstaticcdn.com:80');
+assert.equal(buildAgentConfig({ custom_ct: 'a'.repeat(100) }).custom_ct, '');
+assert.equal(buildAgentConfig({ custom_ct: 'gd-ct-v4.ip.zstaticcdn.com:99999' }).custom_ct, '');
+assert.equal(buildAgentConfig({ custom_ct: 'foo:bar' }).custom_ct, '');
+assert.equal(buildAgentConfig({ custom_ct: '2001:db8::1' }).custom_ct, '');
+assert.deepEqual(validatePingNode('foo:443'), { valid: true, value: 'foo:443' });
+assert.equal(validatePingNode('foo:bar').valid, false);
+assert.equal(validatePingNode('2001:db8::1').valid, false);
 
 console.log('agent config tests passed');

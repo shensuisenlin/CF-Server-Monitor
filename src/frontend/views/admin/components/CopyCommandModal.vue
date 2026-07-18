@@ -56,7 +56,6 @@
           <label class="form-label">{{ trans.trafficResetDay }}</label>
           <div class="flex items-center gap-2">
             <input type="text" readonly :value="resetDay" class="form-input">
-            <button @click="$emit('open-edit-from-copy')" class="btn btn-icon btn-blue" :title="trans.edit">✏️</button>
           </div>
         </div>
       </div>
@@ -81,7 +80,9 @@
       </div>
 
       <div class="modal-footer flex-justify-between">
-        <button @click="$emit('copy-cmd')" class="btn btn-primary">{{ copiedCmd ? '✅ ' + trans.copied : '📋 ' + trans.copy }}</button>
+        <div class="flex items-center gap-2">
+          <button @click="$emit('copy-cmd')" class="btn btn-primary">{{ copiedCmd ? '✅ ' + trans.copied : '📋 ' + trans.copy }}</button> <button @click="$emit('open-edit-from-copy')" class="btn btn-blue">✏️ {{ trans.edit }}</button>
+        </div>
         <button @click="$emit('close')" class="btn">{{ trans.cancel }}</button>
       </div>
     </div>

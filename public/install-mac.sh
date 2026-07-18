@@ -1,11 +1,13 @@
 #!/bin/bash
 # ==============================================================================
-# V1.2.0
+# V1.3.0
 # CF-Server-Monitor 安装/卸载脚本 (macOS 适配版)
 # 支持: macOS Intel / macOS Apple Silicon (M1/M2/M3/M4)
 # ==============================================================================
 
 set -euo pipefail
+
+AGENT_VERSION="1.3.0"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -82,15 +84,15 @@ check_dependencies() {
     step "检测系统依赖..."
     local deps="curl awk grep sed df ps netstat vm_stat sysctl"
     local missing=""
-    for cmd in $deps; do
-        if ! command -v "$cmd" >/dev/null 2>&1; then
-            missing="$missing $cmd"
+    for cmd in ${deps}; do
+        if ! command -v "${cmd}" >/dev/null 2>&1; then
+            missing="${missing} ${cmd}"
         else
-            info "  $cmd ✓"
+            info "  ${cmd} ✓"
         fi
     done
-    if [ -n "$missing" ]; then
-        error "缺少必要的系统命令: $missing"
+    if [ -n "${missing}" ]; then
+        error "缺少必要的系统命令: ${missing}"
     fi
     info "所有依赖检测通过"
 
@@ -108,10 +110,11 @@ stop_old_service() {
 create_script() {
     step "注入 macOS 监控采集探针..."
 
-    cat > "${SCRIPT_FILE}" << 'PROBE_EOF'
+    cat << 'PROBE_EOF' | sed "s|__AGENT_VERSION__|${AGENT_VERSION}|g" > "${SCRIPT_FILE}"
 #!/bin/bash
 set -u
 
+AGENT_VERSION="__AGENT_VERSION__"
 CONFIG_DIR="/Library/Application Support/cf-probe"
 CONFIG_FILE="${CONFIG_DIR}/config.conf"
 TRAFFIC_DATA_FILE="${CONFIG_DIR}/traffic.dat"
@@ -244,7 +247,7 @@ apply_remote_config() {
     bytes=$(wc -c < "$response_file" 2>/dev/null || echo 9999)
     [ "$bytes" -le 1024 ] || return 1
     body=$(cat "$response_file" 2>/dev/null) || return 1
-    case "$body" in ''|*[!a-z0-9_=\&.\-]*) return 1 ;; esac
+    case "$body" in ''|*[!a-z0-9_=\&.\-:]*) return 1 ;; esac
     new_md5=$(awk 'tolower($1)=="x-agent-config-md5:" { gsub("\r", "", $2); print tolower($2); exit }' "$header_file")
     [ "${#new_md5}" -eq 32 ] || return 1
     case "$new_md5" in *[!0-9a-f]*) return 1 ;; esac
@@ -767,15 +770,46 @@ get_tcp_ping_nc() {
     return 1
 }
 
+split_probe_target() {
+    local target="${1:-}"
+    local default_port="${2:-443}"
+    local probe_host="$target"
+    local probe_port="$default_port"
+
+    case "$target" in
+        ''|*[!A-Za-z0-9._:-]*) return 1 ;;
+        *:*)
+            case "${target#*:}" in *:*) return 1 ;; esac
+            probe_host="${target%:*}"
+            probe_port="${target##*:}"
+            ;;
+    esac
+
+    case "$probe_host" in ''|-*) return 1 ;; esac
+    case "$probe_port" in ''|*[!0-9]*|??????*) return 1 ;; esac
+    [ "$probe_port" -ge 1 ] && [ "$probe_port" -le 65535 ] || return 1
+
+    echo "${probe_host} ${probe_port}"
+    return 0
+}
+
 get_probe() {
-    local host="${1:-}"
+    local target="${1:-}"
     local count="${2:-4}"
     local port="${3:-443}"
 
-    if [ -z "$host" ]; then
+    if [ -z "$target" ]; then
         echo "null 100"
         return
     fi
+
+    local host probe_target
+    if ! probe_target=$(split_probe_target "$target" "$port"); then
+        echo "null 100"
+        return
+    fi
+    host="${probe_target% *}"
+    port="${probe_target##* }"
 
     if has_nc_zero_io && get_time_ms >/dev/null 2>&1; then
         local ok=0 total_rtt=0 i=1 rtt
@@ -835,6 +869,10 @@ run_network_worker() {
     set -u
     local last_ip=0
     local last_probe=0
+    local probe_interval="${REPORT_INTERVAL:-60}"
+    case "${probe_interval}" in ''|*[!0-9]*) probe_interval=60 ;; esac
+    [ "${probe_interval}" -lt 30 ] && probe_interval=30
+    [ "${probe_interval}" -gt 60 ] && probe_interval=60
 
     while true; do
         local now; now=$(date +%s)
@@ -845,7 +883,7 @@ run_network_worker() {
             last_ip="${now}"
         fi
 
-        if [ $((now - last_probe)) -ge 30 ] || [ "${last_probe}" -eq 0 ]; then
+        if [ $((now - last_probe)) -ge "${probe_interval}" ] || [ "${last_probe}" -eq 0 ]; then
             refresh_probe_async
             last_probe="${now}"
         fi
@@ -1049,6 +1087,7 @@ EOF
         REPORT_HTTP_CODE=$(curl -skS -D "$REPORT_HEADER_FILE" -o "$REPORT_RESPONSE_FILE" -w "%{http_code}" -X POST \
             -H "Content-Type: application/json" \
             -H "X-Agent-Config-Schema: 2" \
+            -H "X-Agent-Version: ${AGENT_VERSION}" \
             -H "X-Agent-Config-Md5: ${CONFIG_MD5:-none}" \
             -d "${PAYLOAD}" -m 8 --connect-timeout 3 "${WORKER_URL}" 2>/dev/null || echo 000)
         case "$REPORT_HTTP_CODE" in ''|*[!0-9]*) REPORT_HTTP_CODE=000 ;; esac

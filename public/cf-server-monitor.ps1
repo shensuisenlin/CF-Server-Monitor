@@ -92,6 +92,7 @@ $DebugPreference = "SilentlyContinue"
 $ErrorActionPreference = "Stop"
 
 $APP_NAME = "CF-Server-Monitor"
+$AGENT_VERSION = "1.3.0"
 $TASK_NAME = "CFProbe"
 # 获取脚本所在目录
 if ($MyInvocation.MyCommand.Path) {
@@ -223,7 +224,7 @@ function ConvertFrom-AgentConfigResponse {
     }
     $ConfigMd5 = $ConfigMd5.Trim().ToLowerInvariant()
     if ($ConfigMd5 -notmatch '^[a-f0-9]{32}$') { throw "动态配置 MD5 无效" }
-    if ($Body -notmatch '^[a-z0-9_=&.\-]+$') { throw "动态配置包含非法字符" }
+    if ($Body -notmatch '^[a-z0-9_=&.\-:]+$') { throw "动态配置包含非法字符" }
 
     $parts = $Body.Split('&')
     if ($parts.Count -lt 8) { throw "动态配置字段数量无效" }
@@ -389,10 +390,33 @@ function Get-SwapInfo {
 
 function Get-DiskInfo {
     try {
-        $disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
-        $totalMB = [math]::Round($disk.Size / 1024 / 1024)
-        $freeMB = [math]::Round($disk.FreeSpace / 1024 / 1024)
-        $usedMB = $totalMB - $freeMB
+        $disks = @(Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction SilentlyContinue)
+        if (-not $disks -or $disks.Count -eq 0) {
+            $disks = @(Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | Where-Object {
+                $_.Root -match '^[A-Za-z]:\\$' -and $null -ne $_.Used -and $null -ne $_.Free
+            } | ForEach-Object {
+                [PSCustomObject]@{
+                    Size = ([int64]$_.Used + [int64]$_.Free)
+                    FreeSpace = [int64]$_.Free
+                }
+            })
+        }
+
+        $totalBytes = [int64]0
+        $freeBytes = [int64]0
+        foreach ($disk in $disks) {
+            if ($null -eq $disk.Size -or $null -eq $disk.FreeSpace) { continue }
+            $size = [int64]$disk.Size
+            $free = [int64]$disk.FreeSpace
+            if ($size -le 0 -or $free -lt 0) { continue }
+            $totalBytes += $size
+            $freeBytes += $free
+        }
+
+        if ($totalBytes -le 0) { return @{ total = 0; used = 0 } }
+        $totalMB = [math]::Round($totalBytes / 1024 / 1024)
+        $freeMB = [math]::Round($freeBytes / 1024 / 1024)
+        $usedMB = [math]::Max($totalMB - $freeMB, 0)
         return @{ total = $totalMB; used = $usedMB }
     } catch {
         return @{ total = 0; used = 0 }
@@ -481,6 +505,21 @@ function Get-LoadAvg {
 # 网络探测
 # ============================================================
 
+function Resolve-ProbeTarget {
+    param([string]$TargetHost, [int]$DefaultPort = 443)
+    $target = if ($TargetHost) { $TargetHost.Trim() } else { "" }
+    if (-not $target) { return @{ host = ""; port = $DefaultPort } }
+    if ($target.Contains(':')) {
+        if ($target -notmatch '^([^:]+):([0-9]{1,5})$') { return $null }
+        $port = [int]$Matches[2]
+        if ($port -ge 1 -and $port -le 65535) {
+            return @{ host = $Matches[1]; port = $port }
+        }
+        return $null
+    }
+    return @{ host = $target; port = $DefaultPort }
+}
+
 function Get-TcpPing {
     param([string]$TargetHost, [int]$Port = 443) 
     if (-not $TargetHost) { return "" }
@@ -505,11 +544,14 @@ function Get-TcpPing {
 
 function Get-Probe {
     param([string]$TargetHost, [int]$Count = 4)
-    $TargetHost = $TargetHost.Trim()
+    $target = Resolve-ProbeTarget -TargetHost $TargetHost -DefaultPort 443
+    if (-not $target) { return @{ rtt = "null"; loss = "100" } }
+    $TargetHost = $target.host
+    $port = [int]$target.port
     if (-not $TargetHost) { return @{ rtt = "null"; loss = "100" } }
     $ok = 0; $totalRtt = 0
     for ($i = 0; $i -lt $Count; $i++) {
-        $r = Get-TcpPing -TargetHost $TargetHost
+        $r = Get-TcpPing -TargetHost $TargetHost -Port $port
         if ($r -match '^\d+$') { $ok++; $totalRtt += [int]$r }
     }
     $rtt = if ($ok -gt 0) { [math]::Floor($totalRtt / $ok).ToString() } else { "null" }
@@ -533,6 +575,21 @@ function Start-PingBackgroundJob {
     $jobScript = {
         param($ct, $cu, $cm, $bd, $tempFile)
 
+        function Resolve-ProbeTarget {
+            param([string]$TargetHost, [int]$DefaultPort = 443)
+            $target = if ($TargetHost) { $TargetHost.Trim() } else { "" }
+            if (-not $target) { return @{ host = ""; port = $DefaultPort } }
+            if ($target.Contains(':')) {
+                if ($target -notmatch '^([^:]+):([0-9]{1,5})$') { return $null }
+                $port = [int]$Matches[2]
+                if ($port -ge 1 -and $port -le 65535) {
+                    return @{ host = $Matches[1]; port = $port }
+                }
+                return $null
+            }
+            return @{ host = $target; port = $DefaultPort }
+        }
+
         function Get-TcpPing {
             param([string]$TargetHost, [int]$Port = 443)
             if (-not $TargetHost) { return "" }
@@ -554,11 +611,14 @@ function Start-PingBackgroundJob {
 
         function Get-Probe {
             param([string]$TargetHost, [int]$Count = 4)
-            $TargetHost = $TargetHost.Trim()
+            $target = Resolve-ProbeTarget -TargetHost $TargetHost -DefaultPort 443
+            if (-not $target) { return @{ rtt = ""; loss = "" } }
+            $TargetHost = $target.host
+            $port = [int]$target.port
             if (-not $TargetHost) { return @{ rtt = ""; loss = "" } }
             $ok = 0; $totalRtt = 0
             for ($i = 0; $i -lt $Count; $i++) {
-                $r = Get-TcpPing -TargetHost $TargetHost
+                $r = Get-TcpPing -TargetHost $TargetHost -Port $port
                 if ($r -match '^\d+$') { $ok++; $totalRtt += [int]$r }
             }
             $rtt = if ($ok -gt 0) { [math]::Floor($totalRtt / $ok).ToString() } else { "null" }
@@ -1010,8 +1070,11 @@ function Start-TimerCollectLoop {
                 $script:cs_lastIpCheck = $now
             }
 
-            # Ping 每 30 秒检测一次（同时计算延迟和丢包率）
-            if ($now - $script:cs_lastPingCheck -ge 30 -or $script:cs_lastPingCheck -eq 0) {
+            # Ping 跟随上报间隔并限制在 30-60 秒（同时计算延迟和丢包率）
+            $probeInterval = [int]$script:cs_reportInterval
+            if ($probeInterval -lt 30) { $probeInterval = 30 }
+            if ($probeInterval -gt 60) { $probeInterval = 60 }
+            if ($now - $script:cs_lastPingCheck -ge $probeInterval -or $script:cs_lastPingCheck -eq 0) {
                 $script:cs_lastPingCheck = $now
                 $existingJob = Get-Job -Name "CFProbePingJob" -ErrorAction SilentlyContinue
                 if (-not $existingJob -or $existingJob.State -in @("Completed", "Failed", "Stopped")) {
@@ -1113,6 +1176,7 @@ function Start-TimerCollectLoop {
                 try {
                     $requestHeaders = @{
                         'X-Agent-Config-Schema' = '2'
+                        'X-Agent-Version' = $AGENT_VERSION
                         'X-Agent-Config-Md5' = if ($script:cs_configMd5) { $script:cs_configMd5 } else { 'none' }
                     }
                     $response = Invoke-WebRequest -UseBasicParsing -Uri $wUrl -Method Post -Body $json `

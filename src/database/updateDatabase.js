@@ -179,6 +179,7 @@ export async function addHistoryColumns(db) {
     const newHistoryCols = {
       cpu_cores: "INTEGER DEFAULT 0",
       cpu_info: "TEXT DEFAULT ''",
+      agent_version: "TEXT DEFAULT ''",
       gpu: "REAL DEFAULT NULL",
       gpu_info: "TEXT DEFAULT ''",
       arch: "TEXT DEFAULT ''",
