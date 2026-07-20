@@ -916,7 +916,7 @@ Header：`X-Turnstile-Token: <token>`（当 `site_options.turnstile_enabled === 
 
 **字段分类**：
 
-- `APPEARANCE_FIELDS`（写入 `appearance_options` JSON）：`site_title`、`custom_bg`、`custom_head`、`custom_script`
+- `APPEARANCE_FIELDS`（写入 `appearance_options` JSON）：`site_title`、`custom_bg`、`custom_head`、`custom_script`、`csp_static`、`csp_api`、`display_mode`
 - `SITE_FIELDS`（写入 `site_options` JSON）：上表除 appearance 之外的全部
 - 任何未列出的字段会被忽略
 
@@ -1196,6 +1196,7 @@ Header：`X-Turnstile-Token: <token>`（当 `site_options.turnstile_enabled === 
   custom_bg: string,
   custom_head: string,           // 注入到 </head> 之前
   custom_script: string,         // 注入到 </body> 之前
+  display_mode: 'bar' | 'ring' | 'table',
   is_public: 'true' | 'false',
   show_price: 'true' | 'false',
   show_expire: 'true' | 'false',

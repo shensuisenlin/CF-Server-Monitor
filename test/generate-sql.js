@@ -179,7 +179,8 @@ const appearanceOptions = {
   site_title: 'Test',
   custom_bg: 'https://cdn.nodeimage.com/i/fux0OSoFzVZQsn9uZmSDbIpKzZw2r8GW.webp',
   custom_head: '<meta content="test">',
-  custom_script: 'console.log("Hello, World!");'
+  custom_script: 'console.log("Hello, World!");',
+  display_mode: 'bar'
 };
 
 const siteOptions = {

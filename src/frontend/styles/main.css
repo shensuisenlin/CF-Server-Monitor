@@ -940,6 +940,212 @@ body::before {
     color: var(--color-inherit);
 }
 
+.server-card.server-card-ring {
+    --ring-card-title-size: 13px;
+    --ring-card-meta-size: 12px;
+    --ring-card-icon-size: 20px;
+    --ring-card-percent-size: 22px;
+    --ring-card-label-size: 14px;
+    --ring-card-subtext-size: 10px;
+    --ring-card-network-label-size: 13px;
+    --ring-card-network-value-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 16px;
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.006) 30%, rgba(0, 0, 0, 0.02) 100%), var(--bg-secondary);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.server-card.server-card-ring:hover {
+    border-color: rgba(77, 166, 255, 0.8);
+}
+
+
+.server-card-ring-divider {
+    margin: 14px 0 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.server-card-ring-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.metric-ring-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+}
+
+.metric-ring-chart {
+    position: relative;
+    width: 100%;
+    max-width: 128px;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    --ring-thickness: 5px;
+}
+
+.metric-ring-track,
+.metric-ring-progress {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+}
+
+.metric-ring-track {
+    background: transparent;
+    border: var(--ring-thickness) solid var(--border-color);
+    opacity: .6;
+}
+
+.metric-ring-progress {
+    background: conic-gradient(from -90deg, var(--ring-color) 0 calc(var(--ring-value) * 1%), rgba(255, 255, 255, 0.03) 0 100%);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-thickness)), #000 calc(100% - var(--ring-thickness) + 1px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - var(--ring-thickness)), #000 calc(100% - var(--ring-thickness) + 1px));
+}
+
+.metric-ring-center {
+    position: relative;
+    z-index: 1;
+    font-size: var(--ring-card-percent-size);
+    font-weight: 700;
+    color: var(--text-primary);
+    text-shadow: none;
+}
+
+.metric-ring-label {
+    margin-top: 10px;
+    font-size: var(--ring-card-label-size);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.metric-ring-subtext {
+    margin-top: 3px;
+    min-height: 1.2em;
+    font-size: var(--ring-card-subtext-size);
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.server-card-network-panel {
+    margin-top: 22px;
+    padding: 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.server-card-network-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 10px;
+}
+
+.server-card-network-row + .server-card-network-row {
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.server-card-network-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--ring-card-network-label-size);
+    color: var(--text-secondary);
+    min-width: 0;
+}
+
+.server-card-network-values {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    white-space: nowrap;
+    font-size: var(--ring-card-network-value-size);
+    color: var(--text-secondary);
+}
+
+.server-card-speed-up {
+    color: var(--accent-green);
+}
+
+.server-card-speed-down {
+    color: var(--accent-blue);
+}
+
+.server-card-total-values {
+    color: var(--text-secondary);
+}
+
+.server-card-limit-section {
+    margin-top: 8px;
+}
+
+.server-card-limit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-size: var(--ring-card-network-value-size);
+    color: var(--text-secondary);
+}
+
+.server-card-limit-bar {
+    height: 5px;
+    border-radius: 999px;
+    background: var(--border-color);
+    overflow: hidden;
+    opacity: .6;
+}
+
+.server-card-limit-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent-blue);
+    transition: width 0.3s ease;
+}
+
+/* Ping row — ring card */
+.server-card-ping-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: space-between;
+}
+
+.server-card-ping-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.server-card-ping-label {
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.server-card-ping-val {
+    font-weight: 700;
+    font-size: 12px;
+}
+
 /* --------------------------------------------------------------------------
    13. Stat Bar Components
    -------------------------------------------------------------------------- */
@@ -967,6 +1173,7 @@ body::before {
     background: var(--border-color);
     border-radius: 2px;
     overflow: hidden;
+    opacity: .6;
 }
 
 .stat-bar-fill {

@@ -13,18 +13,23 @@
         <div class="site-title">$ {{ sysConfig.site_title || DEFAULT_SITE_TITLE }}</div>
         <div class="controls-group">
           <div class="view-toggle">
-            <button 
-              class="toggle-btn" 
-              :class="{ active: currentView === 'card' }"
-              @click="switchView('card')"
-            >▣ {{ trans.cards }}</button>
-            <button 
-              class="toggle-btn" 
+            <button
+              class="toggle-btn"
+              :class="{ active: currentView === 'bar' }"
+              @click="switchView('bar')"
+            >▤ {{ trans.barChart }}</button>
+            <button
+              class="toggle-btn"
+              :class="{ active: currentView === 'ring' }"
+              @click="switchView('ring')"
+            >◌ {{ trans.ringChart }}</button>
+            <button
+              class="toggle-btn"
               :class="{ active: currentView === 'table' }"
               @click="switchView('table')"
             >≡ {{ trans.table }}</button>
-            <button 
-              class="toggle-btn" 
+            <button
+              class="toggle-btn"
               :class="{ active: currentView === 'map' }"
               @click="switchView('map')"
             >◉ {{ trans.map }}</button>
@@ -68,7 +73,7 @@
       </div>
     </div>
 
-    <div id="view-card" class="view-panel" :class="{ active: currentView === 'card' }">
+    <div id="view-card" class="view-panel" :class="{ active: isCardView }">
       <div v-if="groupedServers.length === 0" class="empty-state">
         [!] {{ trans.noServer }}，请在 <router-link to="/admin" class="admin-link-color">{{ trans.backToAdmin }}</router-link> 中添加
       </div>
@@ -78,9 +83,10 @@
             <span class="prompt-sign">#</span> {{ group.name }} <span class="group-count">[{{ group.servers.length }}]</span>
           </div>
           <div class="servers-grid">
-            <ServerCard 
-              v-for="server in group.servers" 
-              :key="server.id" 
+            <component
+              :is="currentCardComponent"
+              v-for="server in group.servers"
+              :key="server.id + '-' + currentView"
               :server="server"
               :sys-config="sysConfig"
               :to="getServerLink(server)"
@@ -168,9 +174,9 @@
               <td v-if="sysConfig.show_tf && server.traffic_limit">
                 <div class="table-stat">
                   <div class="stat-bar-container stat-bar-small">
-                    <div class="stat-bar-fill" :style="{ width: Math.min(100, parseFloat(getTrafficUsagePercent(server))) + '%', background: 'var(--accent-blue)' }"></div>
+                    <div class="stat-bar-fill" :style="{ width: Math.min(100, calcTrafficUsagePercent(server)) + '%', background: 'var(--accent-blue)' }"></div>
                   </div>
-                  <span>{{ getTrafficUsagePercent(server) }}%</span>
+                  <span>{{ calcTrafficUsagePercent(server).toFixed(1) }}%</span>
                 </div>
               </td>
               <td v-else>-</td>
@@ -220,14 +226,17 @@
 import { ref, computed, inject, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import TerminalHeader from '../components/TerminalHeader.vue'
-import ServerCard from '../components/ServerCard.vue'
+import ServerBarCard from '../components/ServerBarCard.vue'
+import ServerRingCard from '../components/ServerRingCard.vue'
 import Footer from '../components/Footer.vue'
 import OsIcon from '../components/OsIcon.vue'
-import { fetchConfig, fetchServersAll, fetchServersAllWithProgress, formatBytes, createLiveSocket, getFlagRegionCode, getApiBases, getTrafficUsagePercent, isServerOnline } from '../utils/api.js'
+import { fetchConfig, fetchServersAll, fetchServersAllWithProgress, formatBytes, createLiveSocket, getFlagRegionCode, getApiBases, isServerOnline } from '../utils/api.js'
+import { calcTrafficUsagePercent } from '../composables/useServerCardData'
 import { getTitle, hasMultipleApiBases, getPublicAssetUrl } from '../utils/config'
 import { currentLang, useTranslation } from '../utils/i18n.js'
-import { TIME, DEFAULT_SITE_TITLE } from '../utils/constants'
+import { TIME, DEFAULT_SITE_TITLE, STORAGE } from '../utils/constants'
 import { normalizeTimestamp as normalizeMetricTimestamp } from '../utils/time.js'
+import { normalizeDashboardView, normalizeDisplayMode, resolveDisplayMode } from '../utils/displayMode.js'
 
 const servers = ref([])
 const stats = ref({ total: '-', online: 0, offline: 0, globalNetRx: 0, globalNetTx: 0, globalSpeedIn: 0, globalSpeedOut: 0 })
@@ -237,10 +246,11 @@ const sysConfig = ref({
   show_expire: true,
   show_tf: true,
   show_time: true,
+  display_mode: 'bar',
   site_title: DEFAULT_SITE_TITLE
 })
 const regionStats = ref({})
-const currentView = ref('card')
+const currentView = ref('bar')
 const currentFilter = ref('all')
 const mapInitialized = ref(false)
 const liveConnected = ref(false)
@@ -285,13 +295,17 @@ const groupedServers = computed(() => {
   return order.map(name => ({ name, servers: groups[name] }))
 })
 
+const isCardView = computed(() => currentView.value === 'bar' || currentView.value === 'ring')
+const currentCardComponent = computed(() => currentView.value === 'ring' ? ServerRingCard : ServerBarCard)
+
 const switchView = (viewName) => {
-  currentView.value = viewName
-  localStorage.setItem('monitor_preferred_view', viewName)
-  if (viewName === 'map' && !mapInitialized.value) {
+  const normalizedView = normalizeDashboardView(viewName, sysConfig.value.display_mode)
+  currentView.value = normalizedView
+  localStorage.setItem(STORAGE.VIEW_PREFERENCE, normalizedView)
+  if (normalizedView === 'map' && !mapInitialized.value) {
     initMap()
     mapInitialized.value = true
-  } else if (viewName === 'map' && window.myMap) {
+  } else if (normalizedView === 'map' && window.myMap) {
     setTimeout(() => window.myMap.invalidateSize(), 100)
   }
 }
@@ -554,21 +568,12 @@ const mergeServersIntoList = (rawServers) => {
 const loadDashboardConfig = async () => {
   try {
     const localTitle = String(getTitle() || '').trim()
-    if (hasMultipleApiBases() && localTitle) {
-      sysConfig.value = {
-        ...sysConfig.value,
-        site_title: localTitle
-      }
-      return
-    }
-
     const config = appConfig || await fetchConfig()
     const siteTitle = String(config?.site_title || '').trim()
-    if (siteTitle) {
-      sysConfig.value = {
-        ...sysConfig.value,
-        site_title: siteTitle
-      }
+    sysConfig.value = {
+      ...sysConfig.value,
+      site_title: hasMultipleApiBases() && localTitle ? localTitle : (siteTitle || sysConfig.value.site_title),
+      display_mode: resolveDisplayMode(config)
     }
   } catch (e) {
     console.log('[INFO] Dashboard config pending...', e)
@@ -597,6 +602,7 @@ const refreshData = async () => {
           show_expire: data.sysConfig?.show_expire ?? true,
           show_tf: data.sysConfig?.show_tf ?? true,
           show_time: data.sysConfig?.show_time ?? true,
+          display_mode: normalizeDisplayMode(data.sysConfig?.display_mode),
           site_title: sysConfig.value.site_title || DEFAULT_SITE_TITLE
         }
 
@@ -630,6 +636,7 @@ const refreshData = async () => {
       show_expire: data.sysConfig?.show_expire ?? true,
       show_tf: data.sysConfig?.show_tf ?? true,
       show_time: data.sysConfig?.show_time ?? true,
+      display_mode: normalizeDisplayMode(data.sysConfig?.display_mode),
       site_title: sysConfig.value.site_title || DEFAULT_SITE_TITLE
     }
 
@@ -822,9 +829,13 @@ const goToServer = (server) => {
 }
 
 onMounted(async () => {
-  const savedView = localStorage.getItem('monitor_preferred_view') || 'card'
-  currentView.value = savedView
   await loadDashboardConfig()
+  const rawSavedView = localStorage.getItem(STORAGE.VIEW_PREFERENCE)
+  const savedView = normalizeDashboardView(rawSavedView, sysConfig.value.display_mode)
+  currentView.value = savedView
+  if (rawSavedView && rawSavedView !== savedView) {
+    localStorage.setItem(STORAGE.VIEW_PREFERENCE, savedView)
+  }
   await refreshData()
   startLiveSocket()
 
@@ -832,7 +843,7 @@ onMounted(async () => {
   runDashboardTick()
   timeUpdateInterval = setInterval(runDashboardTick, 1000)
 
-  if (savedView === 'map') {
+  if (currentView.value === 'map') {
     switchView('map')
   }
 

@@ -4,6 +4,7 @@ import { DEFAULT_SITE_TITLE } from './constants'
 import { ref } from 'vue'
 import { normalizeTimestamp } from './time.js'
 import { TIME } from './constants'
+import { resolveDisplayMode } from './displayMode.js'
 
 export { getApiBases, getWsBase }
 
@@ -214,26 +215,7 @@ export const formatBytes = (bytes) => {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   const safeIndex = Math.max(0, Math.min(i, sizes.length - 1))
-  return parseFloat((bytes / Math.pow(k, safeIndex)).toFixed(2)) + ' ' + sizes[safeIndex]
-}
-
-export const getTrafficUsagePercent = (server) => {
-  const limit = parseFloat(server.traffic_limit) || 0
-  if (limit <= 0) return '0'
-
-  const limitBytes = limit * 1024 * 1024 * 1024
-  let usedBytes = 0
-
-  const calcType = server.traffic_calc_type || 'total'
-  if (calcType === 'dl') {
-    usedBytes = parseFloat(server.net_rx_monthly) || 0
-  } else if (calcType === 'ul') {
-    usedBytes = parseFloat(server.net_tx_monthly) || 0
-  } else {
-    usedBytes = (parseFloat(server.net_rx_monthly) || 0) + (parseFloat(server.net_tx_monthly) || 0)
-  }
-
-  return ((usedBytes / limitBytes) * 100).toFixed(1)
+  return parseFloat((bytes / Math.pow(k, safeIndex)).toFixed(0)) + ' ' + sizes[safeIndex]
 }
 
 export const isServerOnline = (server, now = Date.now()) => {
@@ -271,6 +253,7 @@ const createEmptyMergedData = () => ({
     show_expire: true,
     show_tf: true,
     show_time: true,
+    display_mode: 'bar',
     site_title: DEFAULT_SITE_TITLE
   }
 })
@@ -308,6 +291,7 @@ const mergeSiteResult = (mergedData, { data, error, baseUrl }, multiSite, localT
       show_expire: data.sysConfig.show_expire ?? mergedData.sysConfig.show_expire,
       show_tf: data.sysConfig.show_tf ?? mergedData.sysConfig.show_tf,
       show_time: data.sysConfig.show_time ?? mergedData.sysConfig.show_time,
+      display_mode: resolveDisplayMode(data.sysConfig, mergedData.sysConfig.display_mode),
       site_title: multiSite ? localTitle : mergedData.sysConfig.site_title
     }
   }

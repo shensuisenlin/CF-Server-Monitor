@@ -25,6 +25,18 @@
 
         <div class="form-row">
           <div class="form-group flex-1">
+            <label class="form-label">{{ trans.displayMode }}</label>
+            <select v-model="settings.display_mode" class="form-select">
+              <option value="bar">{{ trans.displayModeBar }}</option>
+              <option value="ring">{{ trans.displayModeRing }}</option>
+              <option value="table">{{ trans.displayModeTable }}</option>
+            </select>
+            <p class="text-muted text-sm mt-1"><span class="warning-icon">[i]</span> {{ trans.displayModeTip }}</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
             <label class="form-label">{{ trans.customHead }}</label>
             <textarea v-model="settings.custom_head" class="form-textarea" rows="3" placeholder="<link rel='stylesheet' href='...'">
             </textarea>
