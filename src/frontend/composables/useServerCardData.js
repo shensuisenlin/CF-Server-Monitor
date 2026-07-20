@@ -10,7 +10,11 @@ export const DEFAULT_SERVER_CARD_CONFIG = {
   show_expire: true,
   show_tf: true,
   show_time: true,
-  display_mode: 'bar'
+  display_mode: 'bar',
+  custom_ct: '',
+  custom_cu: '',
+  custom_cm: '',
+  custom_bd: ''
 }
 
 export const getTrafficUsageBytes = (server) => {
@@ -53,6 +57,7 @@ export function useServerCardData(props) {
   }
 
   const cpuPercent = computed(() => clampPercent(Number.parseFloat(props.server.cpu || 0) || 0))
+  const cpuCores = computed(() => parseInt(props.server.cpu_cores) || 0)
   const ramPercent = computed(() => {
     const total = Number.parseFloat(props.server.ram_total) || 0
     if (total > 0) {
@@ -87,8 +92,11 @@ export function useServerCardData(props) {
     return trafficUsagePercent.value.toFixed(1)
   })
   const trafficLimitText = computed(() => {
-    if (!trafficLimitSummary.value) return ''
-    return `${formatBytes(trafficLimitSummary.value.usedBytes)} / ${formatBytes(trafficLimitSummary.value.limitBytes)}`
+    if (trafficLimitSummary.value){
+      return `${formatBytes(trafficLimitSummary.value.usedBytes)} / ${formatBytes(trafficLimitSummary.value.limitBytes)}`
+    }else{
+      return `↓ ${totalRxMonthly.value} ↑ ${totalTxMonthly.value}`
+    }
   })
 
   const tagList = computed(() => String(props.server.tags || '')
@@ -102,6 +110,8 @@ export function useServerCardData(props) {
   const netOutSpeed = computed(() => formatBytes(props.server.net_out_speed))
   const totalRx = computed(() => formatBytes(props.server.net_rx))
   const totalTx = computed(() => formatBytes(props.server.net_tx))
+  const totalRxMonthly = computed(() => formatBytes(props.server.net_rx_monthly))
+  const totalTxMonthly = computed(() => formatBytes(props.server.net_tx_monthly))
 
   const loadAvg = computed(() => {
     const raw = String(props.server.load_avg || '').trim()
@@ -205,12 +215,19 @@ export function useServerCardData(props) {
     return 'var(--accent-red)'
   }
 
-  const pingList = computed(() => [
-    { label: 'CT', value: props.server.ping_ct },
-    { label: 'CU', value: props.server.ping_cu },
-    { label: 'CM', value: props.server.ping_cm },
-    { label: 'BD', value: props.server.ping_bd }
-  ])
+  const PING_MAP = { CT: 'custom_ct', CU: 'custom_cu', CM: 'custom_cm', BD: 'custom_bd' }
+
+  const filteredPingList = computed(() => {
+    return [
+      { label: 'CT', value: props.server.ping_ct },
+      { label: 'CU', value: props.server.ping_cu },
+      { label: 'CM', value: props.server.ping_cm },
+      { label: 'BD', value: props.server.ping_bd }
+    ].filter(ping => {
+      const settingKey = PING_MAP[ping.label]
+      return props.sysConfig[settingKey] && String(props.sysConfig[settingKey]).trim() !== ''
+    })
+  })
 
   return {
     trans,
@@ -220,6 +237,7 @@ export function useServerCardData(props) {
     statusColor,
     statusText,
     cpuPercent,
+    cpuCores,
     ramPercent,
     diskPercent,
     trafficLimitSummary,
@@ -233,6 +251,8 @@ export function useServerCardData(props) {
     netOutSpeed,
     totalRx,
     totalTx,
+    totalRxMonthly,
+    totalTxMonthly,
     loadAvg,
     uptimeText,
     ramUsageText,
@@ -244,7 +264,7 @@ export function useServerCardData(props) {
     roundedPercent,
     isPingValid,
     getPingColor,
-    pingList,
+    filteredPingList,
     getPublicAssetUrl,
     formatBytes
   }
