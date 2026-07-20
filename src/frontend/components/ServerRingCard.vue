@@ -97,8 +97,8 @@
           <div class="server-card-limit-fill" :style="{ width: Math.min(100, trafficUsagePercent) + '%' }"></div>
         </div>
       </div>
-      <div class="server-card-ping-row" v-if="filteredPingList.length > 0">
-        <span class="server-card-ping-chip" v-for="p in filteredPingList" :key="p.label">
+      <div v-if="hasPingData" class="server-card-ping-row">
+        <span class="server-card-ping-chip" v-for="p in pingList" :key="p.label">
           <span class="server-card-ping-label">{{ p.label }}</span>
           <span class="server-card-ping-val" :style="{ color: getPingColor(p.value) }">{{ isPingValid(p.value) ? p.value + 'ms' : trans.timeout }}</span>
         </span>
@@ -150,7 +150,8 @@ const {
   roundedPercent,
   isPingValid,
   getPingColor,
-  filteredPingList,
+  pingList,
+  hasPingData,
   getPublicAssetUrl,
   tagList,
   tagColorClass,

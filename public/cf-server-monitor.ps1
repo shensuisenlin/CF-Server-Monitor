@@ -221,6 +221,24 @@ function Save-Config {
     }
 }
 
+function Get-ConfigProperty {
+    param($Config, [string]$Name, $Default = $null)
+    if ($null -eq $Config) { return $Default }
+    if ($Config -is [hashtable]) {
+        if ($Config.ContainsKey($Name)) { return $Config[$Name] }
+        return $Default
+    }
+    $prop = $Config.PSObject.Properties[$Name]
+    if ($null -ne $prop) { return $prop.Value }
+    return $Default
+}
+
+function Get-ProbeInitialValue {
+    param([string]$Node)
+    if ([string]::IsNullOrWhiteSpace($Node)) { return $false }
+    return ""
+}
+
 function ConvertTo-BinaryFlag {
     param(
         [object]$Value,
@@ -713,6 +731,7 @@ function Get-TcpPing {
 
 function Get-Probe {
     param([string]$TargetHost, [int]$Count = 4)
+    if ([string]::IsNullOrWhiteSpace($TargetHost)) { return @{ rtt = $false; loss = $false } }
     $target = Resolve-ProbeTarget -TargetHost $TargetHost -DefaultPort 443
     if (-not $target) { return @{ rtt = "null"; loss = "100" } }
     $TargetHost = $target.host
@@ -780,11 +799,12 @@ function Start-PingBackgroundJob {
 
         function Get-Probe {
             param([string]$TargetHost, [int]$Count = 4)
+            if ([string]::IsNullOrWhiteSpace($TargetHost)) { return @{ rtt = $false; loss = $false } }
             $target = Resolve-ProbeTarget -TargetHost $TargetHost -DefaultPort 443
-            if (-not $target) { return @{ rtt = ""; loss = "" } }
+            if (-not $target) { return @{ rtt = "null"; loss = "100" } }
             $TargetHost = $target.host
             $port = [int]$target.port
-            if (-not $TargetHost) { return @{ rtt = ""; loss = "" } }
+            if (-not $TargetHost) { return @{ rtt = $false; loss = $false } }
             $ok = 0; $totalRtt = 0
             for ($i = 0; $i -lt $Count; $i++) {
                 $r = Get-TcpPing -TargetHost $TargetHost -Port $port
@@ -1161,10 +1181,10 @@ function Start-TimerCollectLoop {
         $resetDay = 1
     }
     $configMd5 = if ($config.config_md5) { $config.config_md5.ToString().Trim().ToLowerInvariant() } else { "none" }
-    $ctNode = if ($CtNode) { $CtNode } elseif ($config.ct_node) { $config.ct_node } else { $DEFAULT_CT }
-    $cuNode = if ($CuNode) { $CuNode } elseif ($config.cu_node) { $config.cu_node } else { $DEFAULT_CU }
-    $cmNode = if ($CmNode) { $CmNode } elseif ($config.cm_node) { $config.cm_node } else { $DEFAULT_CM }
-    $bdNode = if ($BdNode) { $BdNode } elseif ($config.bd_node) { $config.bd_node } else { $DEFAULT_BD }
+    $ctNode = if ($CtNode) { $CtNode } else { Get-ConfigProperty $config 'ct_node' $DEFAULT_CT }
+    $cuNode = if ($CuNode) { $CuNode } else { Get-ConfigProperty $config 'cu_node' $DEFAULT_CU }
+    $cmNode = if ($CmNode) { $CmNode } else { Get-ConfigProperty $config 'cm_node' $DEFAULT_CM }
+    $bdNode = if ($BdNode) { $BdNode } else { Get-ConfigProperty $config 'bd_node' $DEFAULT_BD }
     try {
         $autoUpdate = if ($AutoUpdate -ne "") {
             ConvertTo-BinaryFlag -Value $AutoUpdate -Default "0" -Strict
@@ -1206,14 +1226,14 @@ function Start-TimerCollectLoop {
     $script:cs_lastPingCheck = 0
     $script:cs_ipV4 = "0"
     $script:cs_ipV6 = "0"
-    $script:cs_pingCt = ""
-    $script:cs_pingCu = ""
-    $script:cs_pingCm = ""
-    $script:cs_pingBd = ""
-    $script:cs_lossCt = ""
-    $script:cs_lossCu = ""
-    $script:cs_lossCm = ""
-    $script:cs_lossBd = ""
+    $script:cs_pingCt = Get-ProbeInitialValue $ctNode
+    $script:cs_pingCu = Get-ProbeInitialValue $cuNode
+    $script:cs_pingCm = Get-ProbeInitialValue $cmNode
+    $script:cs_pingBd = Get-ProbeInitialValue $bdNode
+    $script:cs_lossCt = Get-ProbeInitialValue $ctNode
+    $script:cs_lossCu = Get-ProbeInitialValue $cuNode
+    $script:cs_lossCm = Get-ProbeInitialValue $cmNode
+    $script:cs_lossBd = Get-ProbeInitialValue $bdNode
     $script:cs_lastReportTime = 0
     $script:cs_reportInterval = $effectiveReportInterval
     $script:cs_resetDay = $resetDay
@@ -1246,10 +1266,10 @@ function Start-TimerCollectLoop {
             $srvId = $serverId
             $sec = $secret
             $wUrl = $workerUrl
-            $ctN = if ($script:cs_ctNode) { $script:cs_ctNode } elseif ($config.ct_node) { $config.ct_node } else { $ctNode }
-            $cuN = if ($script:cs_cuNode) { $script:cs_cuNode } elseif ($config.cu_node) { $config.cu_node } else { $cuNode }
-            $cmN = if ($script:cs_cmNode) { $script:cs_cmNode } elseif ($config.cm_node) { $config.cm_node } else { $cmNode }
-            $bdN = if ($script:cs_bdNode) { $script:cs_bdNode } elseif ($config.bd_node) { $config.bd_node } else { $bdNode }
+            $ctN = [string]$script:cs_ctNode
+            $cuN = [string]$script:cs_cuNode
+            $cmN = [string]$script:cs_cmNode
+            $bdN = [string]$script:cs_bdNode
             $rDay = $script:cs_resetDay
             $rInterval = $script:cs_reportInterval
             $pFile = $pingTempFile
@@ -1279,15 +1299,21 @@ function Start-TimerCollectLoop {
             # 读取异步 Ping 检测结果
             $pingResults = Read-PingResults -TempFile $pFile
             if ($pingResults) {
-                $script:cs_pingCt = if ($pingResults.ct_ping) { $pingResults.ct_ping } else { $script:cs_pingCt }
-                $script:cs_pingCu = if ($pingResults.cu_ping) { $pingResults.cu_ping } else { $script:cs_pingCu }
-                $script:cs_pingCm = if ($pingResults.cm_ping) { $pingResults.cm_ping } else { $script:cs_pingCm }
-                $script:cs_pingBd = if ($pingResults.bd_ping) { $pingResults.bd_ping } else { $script:cs_pingBd }
-                $script:cs_lossCt = if ($pingResults.ct_loss) { $pingResults.ct_loss } else { $script:cs_lossCt }
-                $script:cs_lossCu = if ($pingResults.cu_loss) { $pingResults.cu_loss } else { $script:cs_lossCu }
-                $script:cs_lossCm = if ($pingResults.cm_loss) { $pingResults.cm_loss } else { $script:cs_lossCm }
-                $script:cs_lossBd = if ($pingResults.bd_loss) { $pingResults.bd_loss } else { $script:cs_lossBd }
+                $props = $pingResults.PSObject.Properties
+                if ($props['ct_ping']) { $script:cs_pingCt = $pingResults.ct_ping }
+                if ($props['cu_ping']) { $script:cs_pingCu = $pingResults.cu_ping }
+                if ($props['cm_ping']) { $script:cs_pingCm = $pingResults.cm_ping }
+                if ($props['bd_ping']) { $script:cs_pingBd = $pingResults.bd_ping }
+                if ($props['ct_loss']) { $script:cs_lossCt = $pingResults.ct_loss }
+                if ($props['cu_loss']) { $script:cs_lossCu = $pingResults.cu_loss }
+                if ($props['cm_loss']) { $script:cs_lossCm = $pingResults.cm_loss }
+                if ($props['bd_loss']) { $script:cs_lossBd = $pingResults.bd_loss }
             }
+
+            if ([string]::IsNullOrWhiteSpace($ctN)) { $script:cs_pingCt = $false; $script:cs_lossCt = $false }
+            if ([string]::IsNullOrWhiteSpace($cuN)) { $script:cs_pingCu = $false; $script:cs_lossCu = $false }
+            if ([string]::IsNullOrWhiteSpace($cmN)) { $script:cs_pingCm = $false; $script:cs_lossCm = $false }
+            if ([string]::IsNullOrWhiteSpace($bdN)) { $script:cs_pingBd = $false; $script:cs_lossBd = $false }
 
             # 采集各项指标
             $cpuPercent = Get-CpuUsage
@@ -1418,14 +1444,14 @@ function Start-TimerCollectLoop {
                                         Write-Log "动态配置已应用: md5=$($remoteConfig.config_md5) report_interval=$($remoteConfig.report_interval)s ct=$($remoteConfig.ct_node) cu=$($remoteConfig.cu_node) cm=$($remoteConfig.cm_node) bd=$($remoteConfig.bd_node)" "INFO"
 
                                         $script:cs_lastPingCheck = 0
-                                        $script:cs_pingCt = ""
-                                        $script:cs_pingCu = ""
-                                        $script:cs_pingCm = ""
-                                        $script:cs_pingBd = ""
-                                        $script:cs_lossCt = ""
-                                        $script:cs_lossCu = ""
-                                        $script:cs_lossCm = ""
-                                        $script:cs_lossBd = ""
+                                        $script:cs_pingCt = Get-ProbeInitialValue $script:cs_ctNode
+                                        $script:cs_pingCu = Get-ProbeInitialValue $script:cs_cuNode
+                                        $script:cs_pingCm = Get-ProbeInitialValue $script:cs_cmNode
+                                        $script:cs_pingBd = Get-ProbeInitialValue $script:cs_bdNode
+                                        $script:cs_lossCt = Get-ProbeInitialValue $script:cs_ctNode
+                                        $script:cs_lossCu = Get-ProbeInitialValue $script:cs_cuNode
+                                        $script:cs_lossCm = Get-ProbeInitialValue $script:cs_cmNode
+                                        $script:cs_lossBd = Get-ProbeInitialValue $script:cs_bdNode
                                         Remove-Item -LiteralPath $pingTempFile -Force -ErrorAction SilentlyContinue
 
                                         $existingPingJob = Get-Job -Name "CFProbePingJob" -ErrorAction SilentlyContinue
@@ -1535,10 +1561,10 @@ function Install-Service {
         reset_day = [int]$ResetDay
         auto_update = $autoUpdateValue
         config_md5 = "none"
-        ct_node = if ($CtNode) { $CtNode } elseif ($existingConfig -and $existingConfig.ct_node) { $existingConfig.ct_node } else { $DEFAULT_CT }
-        cu_node = if ($CuNode) { $CuNode } elseif ($existingConfig -and $existingConfig.cu_node) { $existingConfig.cu_node } else { $DEFAULT_CU }
-        cm_node = if ($CmNode) { $CmNode } elseif ($existingConfig -and $existingConfig.cm_node) { $existingConfig.cm_node } else { $DEFAULT_CM }
-        bd_node = if ($BdNode) { $BdNode } elseif ($existingConfig -and $existingConfig.bd_node) { $existingConfig.bd_node } else { $DEFAULT_BD }
+        ct_node = if ($CtNode) { $CtNode } else { Get-ConfigProperty $existingConfig 'ct_node' $DEFAULT_CT }
+        cu_node = if ($CuNode) { $CuNode } else { Get-ConfigProperty $existingConfig 'cu_node' $DEFAULT_CU }
+        cm_node = if ($CmNode) { $CmNode } else { Get-ConfigProperty $existingConfig 'cm_node' $DEFAULT_CM }
+        bd_node = if ($BdNode) { $BdNode } else { Get-ConfigProperty $existingConfig 'bd_node' $DEFAULT_BD }
     }
 
     if (-not $config.server_id -or -not $config.secret -or -not $config.worker_url) {

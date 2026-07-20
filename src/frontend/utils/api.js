@@ -215,7 +215,7 @@ export const formatBytes = (bytes) => {
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   const safeIndex = Math.max(0, Math.min(i, sizes.length - 1))
-  return parseFloat((bytes / Math.pow(k, safeIndex)).toFixed(0)) + ' ' + sizes[safeIndex]
+  return parseFloat((bytes / Math.pow(k, safeIndex)).toFixed(1)) + ' ' + sizes[safeIndex]
 }
 
 export const isServerOnline = (server, now = Date.now()) => {
@@ -254,11 +254,7 @@ const createEmptyMergedData = () => ({
     show_tf: true,
     show_time: true,
     display_mode: 'bar',
-    site_title: DEFAULT_SITE_TITLE,
-    custom_ct: '',
-    custom_cu: '',
-    custom_cm: '',
-    custom_bd: ''
+    site_title: DEFAULT_SITE_TITLE
   }
 })
 
@@ -296,11 +292,7 @@ const mergeSiteResult = (mergedData, { data, error, baseUrl }, multiSite, localT
       show_tf: data.sysConfig.show_tf ?? mergedData.sysConfig.show_tf,
       show_time: data.sysConfig.show_time ?? mergedData.sysConfig.show_time,
       display_mode: resolveDisplayMode(data.sysConfig, mergedData.sysConfig.display_mode),
-      site_title: multiSite ? localTitle : mergedData.sysConfig.site_title,
-      custom_ct: data.sysConfig.custom_ct ?? mergedData.sysConfig.custom_ct,
-      custom_cu: data.sysConfig.custom_cu ?? mergedData.sysConfig.custom_cu,
-      custom_cm: data.sysConfig.custom_cm ?? mergedData.sysConfig.custom_cm,
-      custom_bd: data.sysConfig.custom_bd ?? mergedData.sysConfig.custom_bd
+      site_title: multiSite ? localTitle : mergedData.sysConfig.site_title
     }
   }
 }

@@ -464,6 +464,31 @@ const getMessage = (msg) => {
   return ''
 }
 
+const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
+
+const formatThemeOptions = (value) => {
+  const normalized = value === undefined || value === null ? {} : value
+  try {
+    return JSON.stringify(normalized, null, 2)
+  } catch (_) {
+    return '{}'
+  }
+}
+
+const parseThemeOptions = (value) => {
+  const raw = String(value || '').trim()
+  if (!raw) return { valid: true, value: {} }
+  try {
+    const parsed = JSON.parse(raw)
+    if (!isPlainObject(parsed)) {
+      return { valid: false }
+    }
+    return { valid: true, value: parsed }
+  } catch (_) {
+    return { valid: false }
+  }
+}
+
 const formatNumber = (value) => Number(value || 0).toLocaleString()
 const getUsagePercent = (used, limit) => {
   if (!limit) return 0
@@ -515,6 +540,7 @@ const settings = ref({
   custom_head: '',
   custom_script: '',
   display_mode: 'bar',
+  theme_options: '{}',
   is_public: false,
   show_price: true,
   show_expire: true,
@@ -826,6 +852,7 @@ const loadSettings = async () => {
         custom_head: settingsData.custom_head || '',
         custom_script: settingsData.custom_script || '',
         display_mode: resolveDisplayMode(settingsData),
+        theme_options: formatThemeOptions(settingsData.theme_options),
         is_public: settingsData.is_public === 'true',
         show_price: settingsData.show_price === 'true',
         show_expire: settingsData.show_expire === 'true',
@@ -918,6 +945,12 @@ const saveSettings = async () => {
     return
   }
 
+  const themeOptionsResult = parseThemeOptions(settings.value.theme_options)
+  if (!themeOptionsResult.valid) {
+    validationError.value = trans.value.invalidThemeOptionsFormat
+    return
+  }
+
   if (settingsPanelRef.value) {
     const cspStaticValid = settingsPanelRef.value.validateCspField('csp_static')
     const cspApiValid = settingsPanelRef.value.validateCspField('csp_api')
@@ -937,6 +970,9 @@ const saveSettings = async () => {
       custom_head: settings.value.custom_head,
       custom_script: settings.value.custom_script,
       display_mode: normalizeDisplayMode(settings.value.display_mode),
+      appearance_options: {
+        theme_options: themeOptionsResult.value
+      },
       is_public: settings.value.is_public ? 'true' : 'false',
       show_price: settings.value.show_price ? 'true' : 'false',
       show_expire: settings.value.show_expire ? 'true' : 'false',

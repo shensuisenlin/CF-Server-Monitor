@@ -1,5 +1,6 @@
 import { getAllServers, getLatestMetricsCache, setLatestMetricsCache, getMetricsHistoryCache, setMetricsHistoryCache, getCacheDuration, clearAllCaches } from '../utils/cache.js';
 import { saveSiteOptions, debug, getSettingByKey } from '../utils/settings.js';
+import { isDisabledProbeMetric, normalizeProbeMetricRow } from '../utils/metrics.js';
 import { ensureServerOptimization, buildHistoryId, getServerHistoryInfo, getHistoryIdRange } from './indexOptimization.js';
 import { addHistoryColumns, ensureHistoryIndex, isHistoryOptimized } from './updateDatabase.js';
 
@@ -286,7 +287,7 @@ export async function getMetricsHistory(db, serverId, hours, columns, server = n
     WHERE rn = 1
   `).bind(...bindValues).all();
 
-  const result = rawResult.results.map(row => ({
+  const result = rawResult.results.map(row => normalizeProbeMetricRow({
     ...row,
     timestamp: Number(row.timestamp)
   }));
@@ -353,14 +354,16 @@ export async function saveMetricsHistory(db, serverId, historyPartitionId, metri
     ? (rawTimestamp < 10000000000 ? rawTimestamp * 1000 : rawTimestamp)
     : Date.now();
 
+  const DISABLED_PROBE_VALUE = 'false';
+
   const parsePing = (val) => {
-    if (val === '' || val === null || val === undefined) return null;
+    if (isDisabledProbeMetric(val)) return DISABLED_PROBE_VALUE;
     const num = parseInt(val);
     return (num > 0) ? num : null;
   };
 
   const parseLoss = (val) => {
-    if (val === '' || val === null || val === undefined) return null;
+    if (isDisabledProbeMetric(val)) return DISABLED_PROBE_VALUE;
     const num = parseInt(val);
     if (Number.isNaN(num)) return null;
     return Math.max(0, Math.min(100, num));
@@ -475,7 +478,7 @@ export async function getLatestMetrics(db, serverId, server = null) {
       ORDER BY timestamp DESC
       LIMIT 1
     `).bind(serverId).first();
-    return result || null;
+    return result ? normalizeProbeMetricRow(result) : null;
   } catch (e) {
     console.error('获取最新指标数据失败:', e);
     return null;

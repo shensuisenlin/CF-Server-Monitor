@@ -384,16 +384,31 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
         return createBadRequestResponse('invalidPingNodeFormat');
       }
 
+      if (settings.appearance_options !== undefined && (
+        settings.appearance_options === null ||
+        typeof settings.appearance_options !== 'object' ||
+        Array.isArray(settings.appearance_options)
+      )) {
+        return createBadRequestResponse('invalidThemeOptionsFormat');
+      }
+
+      const nestedAppearanceOptions = settings.appearance_options || {};
       const appearanceOptions = {};
       for (const field of APPEARANCE_FIELDS) {
-        if (settings[field] !== undefined) {
+        const value = field === 'theme_options' ? nestedAppearanceOptions.theme_options : settings[field];
+        if (value !== undefined) {
           // CSP 字段格式校验：只允许 https:// 开头的域名，逗号分隔
           if (field === 'csp_static' || field === 'csp_api') {
-            appearanceOptions[field] = sanitizeCspDomains(settings[field]);
+            appearanceOptions[field] = sanitizeCspDomains(value);
           } else if (field === 'display_mode') {
-            appearanceOptions[field] = normalizeDisplayMode(settings[field]);
+            appearanceOptions[field] = normalizeDisplayMode(value);
+          } else if (field === 'theme_options') {
+            if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+              return createBadRequestResponse('invalidThemeOptionsFormat');
+            }
+            appearanceOptions[field] = value;
           } else {
-            appearanceOptions[field] = settings[field];
+            appearanceOptions[field] = value;
           }
         }
       }

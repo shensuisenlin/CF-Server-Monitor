@@ -51,6 +51,14 @@
 
         <div class="form-row">
           <div class="form-group flex-1">
+            <label class="form-label">{{ trans.themeOptions }}</label>
+            <textarea v-model="settings.theme_options" class="form-textarea" rows="5" placeholder='{"a":1,"b":2}'></textarea>
+            <p class="text-muted text-sm mt-1">{{ trans.themeOptionsTip }}</p>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
             <label class="form-label">{{ trans.cspStatic }}</label>
             <input type="text" v-model="settings.csp_static" class="form-input" placeholder="https://unpkg.com,https://cdn.jsdelivr.net" @blur="validateCspField('csp_static')">
             <p class="text-muted text-sm mt-1">{{ trans.cspStaticTip }}</p>

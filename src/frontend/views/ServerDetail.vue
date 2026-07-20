@@ -228,17 +228,16 @@
         </div>
       </div>
 
-      <div class="chart-card">
+      <div class="chart-card" v-show="hasPingData">
         <div class="chart-card-header">
           <span class="chart-title">
             <span class="chart-title-icon">▸</span>
             {{ trans.latencyMonitor }}
           </span>
           <div class="ping-indicator">
-            <span class="ping-ct">{{ trans.pingCt }} <b>{{ avgPingCt !== null ? avgPingCt + 'ms' : 'Timeout' }}</b></span>
-            <span class="ping-cu">{{ trans.pingCu }} <b>{{ avgPingCu !== null ? avgPingCu + 'ms' : 'Timeout' }}</b></span>
-            <span class="ping-cm">{{ trans.pingCm }} <b>{{ avgPingCm !== null ? avgPingCm + 'ms' : 'Timeout' }}</b></span>
-            <span class="ping-bd">{{ trans.pingBd }} <b>{{ avgPingBd !== null ? avgPingBd + 'ms' : 'Timeout' }}</b></span>
+            <span v-for="item in visiblePingStats" :key="item.field" :class="item.className">
+              {{ item.label }} <b>{{ item.value !== null ? item.value + 'ms' : 'Timeout' }}</b>
+            </span>
           </div>
         </div>
         <div class="chart-body">
@@ -300,6 +299,7 @@ import { t, currentLang, useTranslation } from '../utils/i18n'
 import { CHART } from '../utils/constants'
 import { formatDateTime } from '../utils/time.js'
 import useTheme from '../composables/useTheme'
+import { isDisabledProbeMetric } from '../../utils/metrics.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -328,6 +328,13 @@ const showLoginModal = ref(false)
 const loading = ref(true)
 
 const trans = useTranslation()
+
+const PING_FIELD_DEFS = [
+  { field: 'ping_ct', lossField: 'loss_ct', labelKey: 'pingCt', className: 'ping-ct', datasetIndex: 0 },
+  { field: 'ping_cu', lossField: 'loss_cu', labelKey: 'pingCu', className: 'ping-cu', datasetIndex: 1 },
+  { field: 'ping_cm', lossField: 'loss_cm', labelKey: 'pingCm', className: 'ping-cm', datasetIndex: 2 },
+  { field: 'ping_bd', lossField: 'loss_bd', labelKey: 'pingBd', className: 'ping-bd', datasetIndex: 3 }
+]
 
 const isMultipleMode = computed(() => hasMultipleApiBases())
 
@@ -399,7 +406,7 @@ const historyLoaded = ref(false)
 
 const charts = {}
 const chartsReady = ref(false)
-const hasLossHistoryData = ref(false)
+const lossHistoryFields = ref({})
 const avgPingCt = ref(null)
 const avgPingCu = ref(null)
 const avgPingCm = ref(null)
@@ -410,6 +417,21 @@ const avgLossCm = ref(null)
 const avgLossBd = ref(null)
 let isInitializingCharts = false
 let databaseUpgradeAlertShown = false
+
+const avgPingRefs = {
+  ping_ct: avgPingCt,
+  ping_cu: avgPingCu,
+  ping_cm: avgPingCm,
+  ping_bd: avgPingBd
+}
+
+const visiblePingFields = computed(() => PING_FIELD_DEFS.filter(item => !isDisabledProbeMetric(server.value[item.field])))
+const hasPingData = computed(() => visiblePingFields.value.length > 0)
+const visiblePingStats = computed(() => visiblePingFields.value.map(item => ({
+  ...item,
+  label: trans.value[item.labelKey],
+  value: avgPingRefs[item.field].value
+})))
 
 const safeDestroyCharts = () => {
   try {
@@ -428,9 +450,9 @@ const parseLoadAvg = (loadAvgStr) => {
   return [load1, load5, load15]
 }
 
-const isLossValid = (value) => value !== null && value !== undefined && value !== '' && !Number.isNaN(parseFloat(value))
+const isLossValid = (value) => !isDisabledProbeMetric(value) && value !== null && value !== undefined && value !== '' && !Number.isNaN(parseFloat(value))
 const formatLoss = (value) => isLossValid(value) ? `${Math.max(0, Math.min(100, parseFloat(value))).toFixed(0)}%` : ''
-const hasLossData = computed(() => hasLossHistoryData.value || ['loss_ct', 'loss_cu', 'loss_cm', 'loss_bd'].some(key => isLossValid(server.value[key])))
+const hasLossData = computed(() => visiblePingFields.value.some(item => lossHistoryFields.value[item.lossField] || isLossValid(server.value[item.lossField])))
 const formatPing = (value) => (value === null || value === undefined || value === '' || value === 'null') ? 'Timeout' : `${value}ms`
 
 const parseBootTimeToMs = (bootTime) => {
@@ -506,6 +528,25 @@ const CHART_DEFS = [
   { key: 'load', ref: () => loadChartRef.value, datasets: [ds(trans.value.load1m || '1 Min', '#00d4aa', { tension: 0.3 }), ds(trans.value.load5m || '5 Min', '#ffb870', { tension: 0.3 }), ds(trans.value.load15m || '15 Min', '#4da6ff', { tension: 0.3 })], legend: true }
 ]
 
+const syncProbeChartVisibility = () => {
+  for (const chartKey of ['ping', 'loss']) {
+    const chart = charts[chartKey]
+    if (!chart) continue
+
+    for (const item of PING_FIELD_DEFS) {
+      const dataset = chart.data.datasets[item.datasetIndex]
+      if (!dataset) continue
+      const disabled = isDisabledProbeMetric(server.value[item.field])
+      dataset.disabledProbe = disabled
+      dataset.hidden = disabled
+      if (typeof chart.setDatasetVisibility === 'function') {
+        chart.setDatasetVisibility(item.datasetIndex, !disabled)
+      }
+    }
+    chart.update('none')
+  }
+}
+
 const initCharts = () => {
   safeDestroyCharts()
 
@@ -539,7 +580,8 @@ const initCharts = () => {
           padding: 12,
           font: { size: 10, family: "'JetBrains Mono', monospace" },
           usePointStyle: true,
-          color: axisLabelColor
+          color: axisLabelColor,
+          filter: (legendItem, chartData) => !chartData.datasets[legendItem.datasetIndex]?.disabledProbe
         }
       },
       tooltip: {
@@ -625,6 +667,8 @@ const initCharts = () => {
       options: createChartOptions(def.unit || '', def.legend, def.formatValue, def.tickFormat)
     })
   }
+
+  syncProbeChartVisibility()
 }
 
 const updateChartsTheme = (theme) => {
@@ -797,10 +841,12 @@ const updateLoadChart = (chart, dataPoints) => {
 const loadAllHistory = async (hours) => {
   try {
     const allData = await fetchAllHistory(serverId, hours, apiIndex.value)
+    lossHistoryFields.value = Object.fromEntries(PING_FIELD_DEFS.map(item => [
+      item.lossField,
+      allData.some(row => isLossValid(row[item.lossField]))
+    ]))
 
     if (allData.length > 0) {
-      hasLossHistoryData.value = allData.some(item => ['loss_ct', 'loss_cu', 'loss_cm', 'loss_bd'].some(key => isLossValid(item[key])))
-
       updateChartDataset(charts.cpu, 0, allData, fieldAccessor('cpu'))
       updateChartDataset(charts.gpu, 0, allData, fieldAccessor('gpu', true))
       updateChartDataset(charts.ram, 0, allData, percentAccessor('ram_used', 'ram_total'))
@@ -833,6 +879,7 @@ const loadAllHistory = async (hours) => {
       avgLossCu.value = avg(allData, 'loss_cu', false)
       avgLossCm.value = avg(allData, 'loss_cm', false)
       avgLossBd.value = avg(allData, 'loss_bd', false)
+      syncProbeChartVisibility()
     }
 
     updateAllChartTimeUnits(hours)
@@ -969,6 +1016,7 @@ const fetchCurrentStatus = async (incomingData) => {
       server.value = data
       loading.value = false
     }
+    syncProbeChartVisibility()
 
     if (data.last_updated) {
       const dataTimestamp = new Date(data.last_updated).getTime()

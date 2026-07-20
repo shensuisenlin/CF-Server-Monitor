@@ -79,10 +79,10 @@
         <span class="stat-time-value">{{ dataTimeText }}</span>
       </div>
     </div>
-    <div class="ping-panel" v-if="filteredPingList.length > 0">
-      <div v-for="ping in filteredPingList" :key="ping.label" class="ping-item">
-        <span class="ping-label">{{ ping.label }}</span>
-        <span class="ping-value" :style="{ color: getPingColor(ping.value) }">{{ !isPingValid(ping.value) ? trans.timeout : ping.value + 'ms' }}</span>
+    <div v-if="hasPingData" class="ping-panel">
+      <div class="ping-item" v-for="p in pingList" :key="p.label">
+        <span class="ping-label">{{ p.label }}</span>
+        <span class="ping-value" :style="{ color: getPingColor(p.value) }">{{ !isPingValid(p.value) ? trans.timeout : p.value + 'ms' }}</span>
       </div>
     </div>
   </router-link>
@@ -129,7 +129,8 @@ const {
   expireText,
   isPingValid,
   getPingColor,
-  filteredPingList,
+  pingList,
+  hasPingData,
   getPublicAssetUrl,
   formatBytes
 } = useServerCardData(props)

@@ -247,11 +247,7 @@ const sysConfig = ref({
   show_tf: true,
   show_time: true,
   display_mode: 'bar',
-  site_title: DEFAULT_SITE_TITLE,
-  custom_ct: '',
-  custom_cu: '',
-  custom_cm: '',
-  custom_bd: ''
+  site_title: DEFAULT_SITE_TITLE
 })
 const regionStats = ref({})
 const currentView = ref('bar')
@@ -577,11 +573,7 @@ const loadDashboardConfig = async () => {
     sysConfig.value = {
       ...sysConfig.value,
       site_title: hasMultipleApiBases() && localTitle ? localTitle : (siteTitle || sysConfig.value.site_title),
-      display_mode: resolveDisplayMode(config),
-      custom_ct: config?.custom_ct || sysConfig.value.custom_ct,
-      custom_cu: config?.custom_cu || sysConfig.value.custom_cu,
-      custom_cm: config?.custom_cm || sysConfig.value.custom_cm,
-      custom_bd: config?.custom_bd || sysConfig.value.custom_bd
+      display_mode: resolveDisplayMode(config)
     }
   } catch (e) {
     console.log('[INFO] Dashboard config pending...', e)
@@ -611,11 +603,7 @@ const refreshData = async () => {
           show_tf: data.sysConfig?.show_tf ?? true,
           show_time: data.sysConfig?.show_time ?? true,
           display_mode: normalizeDisplayMode(data.sysConfig?.display_mode),
-          site_title: sysConfig.value.site_title || DEFAULT_SITE_TITLE,
-          custom_ct: data.sysConfig?.custom_ct || '',
-          custom_cu: data.sysConfig?.custom_cu || '',
-          custom_cm: data.sysConfig?.custom_cm || '',
-          custom_bd: data.sysConfig?.custom_bd || ''
+          site_title: sysConfig.value.site_title || DEFAULT_SITE_TITLE
         }
 
         if (data.corsErrorSites?.length && !hasCorsError.value) hasCorsError.value = [...data.corsErrorSites]
@@ -649,11 +637,7 @@ const refreshData = async () => {
       show_tf: data.sysConfig?.show_tf ?? true,
       show_time: data.sysConfig?.show_time ?? true,
       display_mode: normalizeDisplayMode(data.sysConfig?.display_mode),
-      site_title: sysConfig.value.site_title || DEFAULT_SITE_TITLE,
-      custom_ct: data.sysConfig?.custom_ct || '',
-      custom_cu: data.sysConfig?.custom_cu || '',
-      custom_cm: data.sysConfig?.custom_cm || '',
-      custom_bd: data.sysConfig?.custom_bd || ''
+      site_title: sysConfig.value.site_title || DEFAULT_SITE_TITLE
     }
 
     drawMarkers()
