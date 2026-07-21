@@ -30,6 +30,20 @@ export const calcTrafficUsagePercent = (server) => {
   return (usedBytes / limitBytes) * 100
 }
 
+const clampPercent = (value) => {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return 0
+  return Math.max(0, Math.min(100, num))
+}
+
+export const getUsageColor = (percent) => {
+  const p = clampPercent(percent)
+  if (p >= 95) return 'var(--accent-red)'
+  if (p >= 80) return 'var(--accent-yellow)'
+  if (p >= 50) return 'var(--accent-blue)'
+  return 'var(--accent-green)'
+}
+
 export function useServerCardData(props) {
   const trans = useTranslation()
 
@@ -45,12 +59,6 @@ export function useServerCardData(props) {
   const isOnline = computed(() => isServerOnline(props.server, currentTime.value))
   const statusColor = computed(() => isOnline.value ? 'var(--accent-green)' : 'var(--accent-red)')
   const statusText = computed(() => isOnline.value ? trans.value.online : trans.value.offline)
-
-  const clampPercent = (value) => {
-    const num = Number(value)
-    if (!Number.isFinite(num)) return 0
-    return Math.max(0, Math.min(100, num))
-  }
 
   const cpuPercent = computed(() => clampPercent(Number.parseFloat(props.server.cpu || 0) || 0))
   const cpuCores = computed(() => parseInt(props.server.cpu_cores) || 0)
@@ -254,6 +262,7 @@ export function useServerCardData(props) {
     dataTimeText,
     isExpired,
     expireText,
+    getUsageColor,
     getRingStyle,
     roundedPercent,
     isPingValid,

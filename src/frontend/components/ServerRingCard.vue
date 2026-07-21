@@ -35,7 +35,7 @@
 
     <div class="server-card-ring-metrics">
       <div class="metric-ring-item">
-        <div class="metric-ring-chart" :style="getRingStyle(cpuPercent, 'var(--accent-cyan)')">
+        <div class="metric-ring-chart" :style="getRingStyle(cpuPercent, getUsageColor(cpuPercent))">
           <span class="metric-ring-track"></span>
           <span class="metric-ring-progress"></span>
           <span class="metric-ring-center">{{ roundedPercent(cpuPercent) }}%</span>
@@ -45,7 +45,7 @@
       </div>
 
       <div class="metric-ring-item">
-        <div class="metric-ring-chart" :style="getRingStyle(ramPercent, 'var(--accent-purple)')">
+        <div class="metric-ring-chart" :style="getRingStyle(ramPercent, getUsageColor(ramPercent))">
           <span class="metric-ring-track"></span>
           <span class="metric-ring-progress"></span>
           <span class="metric-ring-center">{{ roundedPercent(ramPercent) }}%</span>
@@ -55,7 +55,7 @@
       </div>
 
       <div class="metric-ring-item">
-        <div class="metric-ring-chart" :style="getRingStyle(diskPercent, 'var(--accent-green)')">
+        <div class="metric-ring-chart" :style="getRingStyle(diskPercent, getUsageColor(diskPercent))">
           <span class="metric-ring-track"></span>
           <span class="metric-ring-progress"></span>
           <span class="metric-ring-center">{{ roundedPercent(diskPercent) }}%</span>
@@ -94,7 +94,7 @@
           <span>{{ trafficLimitText }} | <template v-if="trafficLimitSummary">{{ trafficLimitPercentText }}%</template><template v-else>Unlimited</template></span>
         </div>
         <div v-if="trafficLimitSummary" class="server-card-limit-bar">
-          <div class="server-card-limit-fill" :style="{ width: Math.min(100, trafficUsagePercent) + '%' }"></div>
+          <div class="server-card-limit-fill" :style="{ width: Math.min(100, trafficUsagePercent) + '%', background: getUsageColor(trafficUsagePercent) }"></div>
         </div>
       </div>
       <div v-if="hasPingData" class="server-card-ping-row">
@@ -146,6 +146,7 @@ const {
   loadAvg,
   ramUsageText,
   diskUsageText,
+  getUsageColor,
   getRingStyle,
   roundedPercent,
   isPingValid,
