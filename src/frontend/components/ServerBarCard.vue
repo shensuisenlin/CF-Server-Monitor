@@ -32,28 +32,28 @@
       <div class="stat-row">
         <span class="stat-key">CPU</span>
         <div class="stat-bar-container">
-          <div class="stat-bar-fill" :style="{ width: cpuPercent + '%', background: 'var(--accent-cyan)' }"></div>
+          <div class="stat-bar-fill" :style="{ width: cpuPercent + '%', background: getUsageColor(cpuPercent) }"></div>
         </div>
         <span class="stat-value">{{ cpuPercent.toFixed(2) }}%</span>
       </div>
       <div class="stat-row">
         <span class="stat-key">RAM</span>
         <div class="stat-bar-container">
-          <div class="stat-bar-fill" :style="{ width: ramPercent + '%', background: 'var(--accent-purple)' }"></div>
+          <div class="stat-bar-fill" :style="{ width: ramPercent + '%', background: getUsageColor(ramPercent) }"></div>
         </div>
         <span class="stat-value">{{ ramPercent.toFixed(2) }}%</span>
       </div>
       <div class="stat-row">
         <span class="stat-key">DISK</span>
         <div class="stat-bar-container">
-          <div class="stat-bar-fill" :style="{ width: diskPercent + '%', background: 'var(--accent-green)' }"></div>
+          <div class="stat-bar-fill" :style="{ width: diskPercent + '%', background: getUsageColor(diskPercent) }"></div>
         </div>
         <span class="stat-value">{{ diskPercent.toFixed(2) }}%</span>
       </div>
       <div class="stat-row" v-if="sysConfig.show_tf && server.traffic_limit">
         <span class="stat-key">USE</span>
         <div class="stat-bar-container">
-          <div class="stat-bar-fill" :style="{ width: Math.min(100, trafficUsagePercent) + '%', background: 'var(--accent-blue)' }"></div>
+          <div class="stat-bar-fill" :style="{ width: Math.min(100, trafficUsagePercent) + '%', background: getUsageColor(trafficUsagePercent) }"></div>
         </div>
         <span class="stat-value">{{ trafficUsagePercentText }}%</span>
       </div>
@@ -117,6 +117,7 @@ const {
   diskPercent,
   trafficUsagePercent,
   trafficUsagePercentText,
+  getUsageColor,
   tagList,
   tagColorClass,
   netInSpeed,
