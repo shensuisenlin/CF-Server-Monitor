@@ -37,9 +37,10 @@
 
         <div class="form-group flex-1">
           <label class="form-label">{{ trans.currency }}</label>
-          <select v-model="editForm.currency" class="form-select">
+          <input type="text" v-model="editForm.currency" class="form-input" list="currency-list" placeholder="e.g. $, ¥, €">
+          <datalist id="currency-list">
             <option v-for="item in currencyOptions" :key="item.symbol" :value="item.symbol">{{ currencyLabel(item) }}</option>
-          </select>
+          </datalist>
         </div>
 
         <div class="form-group flex-1">
@@ -79,6 +80,7 @@
             <option value="total">{{ trans.trafficCalcTotal }}</option>
             <option value="ul">{{ trans.trafficCalcUl }}</option>
             <option value="dl">{{ trans.trafficCalcDl }}</option>
+            <option value="max">{{ trans.trafficCalcMax }}</option>
           </select>
         </div>
         <div class="form-group flex-1">
