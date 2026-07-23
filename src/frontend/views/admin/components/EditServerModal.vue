@@ -32,12 +32,38 @@
       <div class="form-row">
         <div class="form-group flex-1">
           <label class="form-label">{{ trans.price }}</label>
-          <input type="text" name="edit_price" autocomplete="off" v-model="editForm.price" class="form-input" placeholder="e.g. $40/Y">
+          <input type="text" name="edit_price" autocomplete="off" inputmode="decimal" v-model="editForm.price" class="form-input" placeholder="40.00" @blur="normalizePriceInput">
         </div>
 
         <div class="form-group flex-1">
+          <label class="form-label">{{ trans.currency }}</label>
+          <select v-model="editForm.currency" class="form-select">
+            <option v-for="item in currencyOptions" :key="item.symbol" :value="item.symbol">{{ currencyLabel(item) }}</option>
+          </select>
+        </div>
+
+        <div class="form-group flex-1">
+          <label class="form-label">{{ trans.billingCycle }}</label>
+          <select v-model="editForm.billing_cycle" class="form-select">
+            <option v-for="item in billingCycleOptions" :key="item.value" :value="item.value">{{ cycleLabel(item) }}</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group flex-1">
           <label class="form-label">{{ trans.expirationDate }}</label>
-          <input type="date" name="edit_expire_date" autocomplete="off" v-model="editForm.expire_date" class="form-input">
+          <input type="date" name="edit_expire_date" autocomplete="off" v-model="editForm.expire_date" class="form-input" @click="openDatePicker">
+        </div>
+
+        <div class="form-group flex-1">
+          <label class="form-label">{{ trans.autoRenewal }}</label>
+          <div class="checkbox-item no-margin">
+            <input type="checkbox" v-model="editForm.auto_renewal">
+            <label>
+              <b>{{ trans.enabled }}</b>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -143,8 +169,7 @@
           <div class="checkbox-item no-margin">
             <input type="checkbox" v-model="editForm.is_hidden">
             <label>
-              <b>{{ trans.hideFromPublic }}</b><br>
-              <span class="text-xs text-muted">{{ trans.hideDesc }}</span>
+              <b>{{ trans.hideFromPublic }}</b>
             </label>
           </div>
         </div>
@@ -153,8 +178,7 @@
           <div class="checkbox-item no-margin">
             <input type="checkbox" v-model="editForm.offline_notify_disabled">
             <label>
-              <b>{{ trans.disableOfflineNotify }}</b><br>
-              <span class="text-xs text-muted">{{ trans.disableOfflineNotifyDesc }}</span>
+              <b>{{ trans.disableOfflineNotify }}</b>
             </label>
           </div>
         </div>
@@ -169,8 +193,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { PING_NODE_FIELDS, validatePingNode } from '../../../utils/pingNode.js'
+import { currentLang } from '../../../utils/i18n.js'
+import { BILLING_CYCLES, CURRENCY_OPTIONS, normalizePrice, renewExpireDateIfNeeded } from '../../../../utils/serverBilling.js'
 
 const editForm = defineModel('editForm', { type: Object, required: true })
 
@@ -193,6 +219,41 @@ const pingNodeErrors = computed(() => Object.fromEntries(
 ))
 
 const hasPingNodeErrors = computed(() => Object.values(pingNodeErrors.value).some(Boolean))
+
+const billingCycleOptions = BILLING_CYCLES
+const currencyOptions = CURRENCY_OPTIONS
+
+const cycleLabel = (item) => currentLang.value === 'zh' ? item.labelZh : item.labelEn
+const currencyLabel = (item) => currentLang.value === 'zh'
+  ? `${item.symbol} ${item.nameZh}`
+  : `${item.symbol} ${item.nameEn}`
+
+const normalizePriceInput = () => {
+  editForm.value.price = normalizePrice(editForm.value.price)
+}
+
+const openDatePicker = (event) => {
+  const input = event?.currentTarget
+  if (typeof input?.showPicker !== 'function') return
+  try {
+    input.showPicker()
+  } catch (_) {}
+}
+
+watch(
+  () => [editForm.value.auto_renewal, editForm.value.billing_cycle, editForm.value.expire_date],
+  () => {
+    if (!editForm.value.auto_renewal) return
+    const renewal = renewExpireDateIfNeeded(
+      editForm.value.expire_date,
+      editForm.value.billing_cycle,
+      editForm.value.auto_renewal
+    )
+    if (renewal.renewed) {
+      editForm.value.expire_date = renewal.expire_date
+    }
+  }
+)
 
 const emit = defineEmits(['save', 'close', 'toggle-auto-update'])
 

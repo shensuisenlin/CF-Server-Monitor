@@ -1,4 +1,11 @@
 import { debug, getSettingByKey } from '../utils/settings.js';
+import {
+  detectBillingCycle,
+  detectCurrencySymbol,
+  normalizeBillingCycle,
+  normalizeCurrency,
+  normalizePrice
+} from '../utils/serverBilling.js';
 
 
 export async function updateDatabase(db) {
@@ -111,6 +118,7 @@ export async function addServerColumns(db) {
   try {
     const { results: columns } = await db.prepare(`PRAGMA table_info(servers)`).all();
     const existingCols = columns.map(c => c.name);
+    const shouldMigrateLegacyPrice = !existingCols.includes('billing_cycle');
     
     const newCols = {
       is_hidden: "TEXT DEFAULT '0'",
@@ -118,6 +126,9 @@ export async function addServerColumns(db) {
       sort_order: "INTEGER DEFAULT 0",
       tags: "TEXT DEFAULT ''",
       note: "TEXT DEFAULT ''",
+      billing_cycle: "TEXT DEFAULT 'month'",
+      auto_renewal: "TEXT DEFAULT '0'",
+      currency: "TEXT DEFAULT '¥'",
       reset_day: "INTEGER DEFAULT 1",
       collect_interval: "INTEGER DEFAULT 0",
       report_interval: "INTEGER DEFAULT 60",
@@ -140,8 +151,26 @@ export async function addServerColumns(db) {
         added++;
       }
     }
+
+    let migratedPrices = 0;
+    if (shouldMigrateLegacyPrice) {
+      const { results: servers = [] } = await db.prepare(
+        `SELECT id, price FROM servers`
+      ).all();
+
+      for (const server of servers) {
+        const normalizedPrice = normalizePrice(server.price);
+        const billingCycle = normalizeBillingCycle(detectBillingCycle(server.price));
+        const currency = normalizeCurrency(detectCurrencySymbol(server.price) || '¥');
+
+        await db.prepare(
+          `UPDATE servers SET price = ?, billing_cycle = ?, currency = ? WHERE id = ?`
+        ).bind(normalizedPrice, billingCycle, currency, server.id).run();
+        migratedPrices++;
+      }
+    }
     
-    return { success: true, added };
+    return { success: true, added, migratedPrices };
   } catch (e) {
     debug('添加 servers 表列失败:', e);
     return { success: false, error: e.message };

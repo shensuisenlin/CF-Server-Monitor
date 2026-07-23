@@ -75,7 +75,10 @@ const servers = [
     server_group: 'Production',
     tags: 'production,us-east,edge',
     note: 'Primary production node',
-    price: '$15/mo',
+    price: '15.00',
+    billing_cycle: 'month',
+    auto_renewal: '1',
+    currency: '$',
     expire_date: '2026-12-31',
     traffic_limit: '2TB',
     is_hidden: '0',
@@ -87,7 +90,10 @@ const servers = [
     server_group: 'Production',
     tags: 'production,jp-tokyo',
     note: 'Hidden standby node',
-    price: '$10/mo',
+    price: '10.00',
+    billing_cycle: 'month',
+    auto_renewal: '0',
+    currency: '$',
     expire_date: '2026-06-30',
     traffic_limit: '1TB',
     is_hidden: '1',
@@ -116,6 +122,9 @@ CREATE TABLE IF NOT EXISTS servers (
   tags TEXT DEFAULT '',
   note TEXT DEFAULT '',
   price TEXT DEFAULT '',
+  billing_cycle TEXT DEFAULT 'month',
+  auto_renewal TEXT DEFAULT '0',
+  currency TEXT DEFAULT '¥',
   expire_date TEXT DEFAULT '',
   traffic_limit TEXT DEFAULT '',
   traffic_calc_type TEXT DEFAULT 'total',
@@ -207,9 +216,10 @@ const serverLatestMetrics = {};
 
 for (const server of servers) {
   sql += `INSERT INTO servers (
-    id, name, server_group, tags, note, price, expire_date, traffic_limit, is_hidden, sort_order
+    id, name, server_group, tags, note, price, billing_cycle, auto_renewal, currency, expire_date, traffic_limit, is_hidden, sort_order
   ) VALUES (
     '${server.id}', '${server.name}', '${server.server_group}', '${server.tags}', '${server.note}', '${server.price}',
+    '${server.billing_cycle}', '${server.auto_renewal}', '${server.currency}',
     '${server.expire_date}', '${server.traffic_limit}',
     '${server.is_hidden}', ${server.sort_order}
   );\n`;

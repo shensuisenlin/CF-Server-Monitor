@@ -256,7 +256,10 @@ Headers: (按需) Authorization, X-Turnstile-Token/Verified
   "name": "HK-01",
   "server_group": "HK",
   "tags": "prod,edge",
-  "price": "￥30/月",
+  "price": "30.00",
+  "billing_cycle": "month",
+  "auto_renewal": "0",
+  "currency": "¥",
   "expire_date": "2026-12-31",
   "traffic_limit": "1TB",
   "traffic_calc_type": "total",
@@ -477,7 +480,10 @@ interface Server {
   name: string;
   server_group: string;
   tags: string;
-  price: string;
+  price: string; // "0" 或 "-1" 表示免费，空白表示未设置
+  billing_cycle: string;
+  auto_renewal: string;
+  currency: string;
   expire_date: string;
   traffic_limit: string;
   traffic_calc_type: string;

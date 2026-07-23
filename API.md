@@ -450,7 +450,10 @@ CORS_ALLOWED_ORIGINS=https://status.example.com,https://admin.example.com
   "id": "9b2c...",
   "name": "HK-01",
   "server_group": "HK",
-  "price": "￥30/月",
+  "price": "30.00",
+  "billing_cycle": "month",
+  "auto_renewal": "0",
+  "currency": "¥",
   "expire_date": "2026-12-31",
   "traffic_limit": "1TB",
   "traffic_calc_type": "total",
@@ -981,7 +984,10 @@ Header：`X-Turnstile-Token: <token>`（当 `site_options.turnstile_enabled === 
   "id": "<server UUID>",
   "name": "HK-01",                   // 可选，1~100 字符
   "server_group": "HK",               // 默认 "Default"
-  "price": "￥30/月",                  // 字符串
+  "price": "30.00",                   // 字符串，保存时自动转换为两位小数；"0" 或 "-1" 表示免费，空白表示未设置
+  "billing_cycle": "month",            // month | quarter | half_year | year | two_years | three_years | four_years | five_years
+  "auto_renewal": "0",                 // "0" | "1"
+  "currency": "¥",                     // ¥ | $ | € | £ | ₽ | ₣ | ₹ | ₫ | ฿
   "expire_date": "2026-12-31",
   "traffic_limit": "1TB",
   "traffic_calc_type": "total",       // total | ...
@@ -1146,7 +1152,10 @@ Header：`X-Turnstile-Token: <token>`（当 `site_options.turnstile_enabled === 
 | `id`                                          | string (UUID)      | 主键                        |
 | `name`                                        | string             | 显示名                       |
 | `server_group`                                | string             | 分组                        |
-| `price`                                       | string             | 价格文本（自由格式）                |
+| `price`                                       | string             | 价格金额文本，保存时规范为两位小数；`0` 或 `-1` 表示免费，空白表示未设置 |
+| `billing_cycle`                               | string             | `month` / `quarter` / `half_year` / `year` / `two_years` / `three_years` / `four_years` / `five_years` |
+| `auto_renewal`                                | string `"0"`/`"1"` | 是否启用自动续费                    |
+| `currency`                                    | string             | 货币符号：`¥` 人民币、`$` 美元、`€` 欧元、`£` 英镑、`₽` 卢布、`₣` 法郎、`₹` 卢比、`₫` 越南盾、`฿` 泰铢 |
 | `expire_date`                                 | string             | 到期日 `YYYY-MM-DD`          |
 | `traffic_limit`                               | string             | 流量上限文本                    |
 | `traffic_calc_type`                           | string             | `total` / 其他              |
@@ -1364,7 +1373,7 @@ curl -X POST https://status.example.com/admin/api \
 curl -X POST https://status.example.com/admin/api \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"action":"edit","id":"9b2c4d3e-1a2b-4c5d-9e8f-7a6b5c4d3e2f","price":"￥35/月","expire_date":"2027-01-01"}'
+  -d '{"action":"edit","id":"9b2c4d3e-1a2b-4c5d-9e8f-7a6b5c4d3e2f","price":"35.00","billing_cycle":"month","auto_renewal":"1","currency":"¥","expire_date":"2027-01-01"}'
 ```
 
 ### 8.10 管理：删除

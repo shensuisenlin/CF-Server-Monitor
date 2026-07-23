@@ -17,7 +17,7 @@
       </div>
       <div class="server-meta">
         <div class="card-meta">
-          <div v-if="sysConfig.show_price && server.price" class="card-meta-item">💰 {{ server.price }}</div>
+          <div v-if="sysConfig.show_price && priceText" class="card-meta-item">💰 {{ priceText }}</div>
           <div v-if="sysConfig.show_expire && server.expire_date" class="card-meta-item">📅 <span :class="{ 'expired': isExpired }">{{ expireText }}</span></div>
         </div>
         <div class="card-badges">
@@ -143,6 +143,7 @@ const {
   netOutSpeed,
   totalRx,
   totalTx,
+  priceText,
   loadAvg,
   ramUsageText,
   diskUsageText,

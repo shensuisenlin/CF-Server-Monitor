@@ -35,7 +35,10 @@
             <th>{{ trans.tags.toUpperCase() }}</th>
             <th>{{ trans.note.toUpperCase() }}</th>
             <th>{{ trans.price.toUpperCase() }}</th>
+            <th>{{ trans.currency.toUpperCase() }}</th>
+            <th>{{ trans.billingCycle.toUpperCase() }}</th>
             <th>{{ trans.expirationDate.toUpperCase() }}</th>
+            <th>{{ trans.autoRenewal.toUpperCase() }}</th>
             <th>{{ trans.traffic.toUpperCase() }}</th>
             <th>{{ trans.agentVersion.toUpperCase() }}</th>
             <th>{{ trans.status.toUpperCase() }}</th>
@@ -44,7 +47,7 @@
         </thead>
         <tbody>
           <tr v-if="servers.length === 0">
-            <td colspan="12" class="empty-state"><span class="empty-icon">📦</span> {{ trans.noServers }}</td>
+            <td colspan="15" class="empty-state"><span class="empty-icon">📦</span> {{ trans.noServers }}</td>
           </tr>
           <tr
             v-for="server in servers"
@@ -81,8 +84,11 @@
                 @dblclick.stop="$emit('copy-note', server)"
               >{{ server.note || '-' }}</span>
             </td>
-            <td><span class="price-tag">{{ server.price || '-' }}</span></td>
+            <td><span class="price-tag">{{ formatServerPrice(server) }}</span></td>
+            <td><span class="spec-text">{{ formatServerCurrency(server) }}</span></td>
+            <td><span class="spec-text">{{ formatServerBillingCycle(server) }}</span></td>
             <td><span class="date-text">{{ server.expire_date || '-' }}</span></td>
+            <td><span class="spec-text">{{ isServerAutoRenewal(server) ? trans.enabled : trans.disabled }}</span></td>
             <td><span class="spec-text">{{ server.traffic_limit ? formatBytes(server.traffic_limit * 1024 * 1024 * 1024) : '-' }}</span></td>
             <td>
               <span
@@ -112,6 +118,8 @@
 <script setup>
 import { getFlagRegionCode, formatBytes } from '../../../utils/api'
 import { getPublicAssetUrl } from '../../../utils/config'
+import { currentLang } from '../../../utils/i18n'
+import { detectBillingCycle, detectCurrencySymbol, getBillingCycleOption, isEnabledFlag, isFreePrice, normalizeCurrency, normalizePrice } from '../../../../utils/serverBilling.js'
 import OsIcon from '../../../components/OsIcon.vue'
 
 const props = defineProps({
@@ -140,6 +148,23 @@ const splitTags = (value) => String(value || '')
   .map(tag => tag.trim())
   .filter(Boolean)
 const tagColorClass = (index) => `tag-color-${index % 6}`
+const formatServerPrice = (server) => {
+  const price = normalizePrice(server.price)
+  if (!price) return '-'
+  return isFreePrice(price) ? props.trans.free : price
+}
+const formatServerCurrency = (server) => {
+  const price = normalizePrice(server.price)
+  if (!price || isFreePrice(price)) return '-'
+  return normalizeCurrency(server.currency || detectCurrencySymbol(server.price)) || '-'
+}
+const formatServerBillingCycle = (server) => {
+  const price = normalizePrice(server.price)
+  if (!price || isFreePrice(price)) return '-'
+  const option = getBillingCycleOption(detectBillingCycle(server.price) || server.billing_cycle)
+  return currentLang.value === 'zh' ? option.shortLabelZh : option.shortLabelEn
+}
+const isServerAutoRenewal = (server) => isEnabledFlag(server.auto_renewal)
 const normalizeVersion = (version) => String(version || '').trim()
 const getAgentVersionClass = (version) => {
   const latest = normalizeVersion(props.latestAgentVersion)

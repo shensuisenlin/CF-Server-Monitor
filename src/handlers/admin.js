@@ -9,11 +9,29 @@ import { addServerColumns } from '../database/updateDatabase.js';
 import { sendNotification } from '../services/notification.js';
 import { getNextServerHistoryPartitionId, HISTORY_MAX_PARTITION_ID } from '../database/indexOptimization.js';
 import { isValidTrafficCorrection, validateAgentConfigInput, validatePingNode } from '../utils/agentConfig.js';
+import { detectBillingCycle, detectCurrencySymbol, normalizeBillingCycle, normalizeCurrency, normalizePrice, renewExpireDateIfNeeded } from '../utils/serverBilling.js';
 
 const PING_NODE_FIELDS = ['custom_ct', 'custom_cu', 'custom_cm', 'custom_bd'];
 
 function normalizeBooleanFlag(value) {
   return value === true || value === 1 || value === '1' || value === 'true' ? '1' : '0';
+}
+
+function normalizeServerBillingData(data = {}) {
+  const billingCycle = normalizeBillingCycle(data.billing_cycle || detectBillingCycle(data.price));
+  const autoRenewal = normalizeBooleanFlag(data.auto_renewal);
+
+  return {
+    price: normalizePrice(data.price),
+    billing_cycle: billingCycle,
+    auto_renewal: autoRenewal,
+    currency: normalizeCurrency(data.currency || detectCurrencySymbol(data.price) || '¥'),
+    expire_date: renewExpireDateIfNeeded(
+      data.expire_date || '',
+      billingCycle,
+      autoRenewal
+    ).expire_date
+  };
 }
 
 function isValidUUID(id) {
@@ -502,7 +520,7 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
       });
     }
     else if (data.action === 'edit') {
-      const { id, name, server_group, tags, note, price, expire_date, traffic_limit, traffic_calc_type, reset_day, collect_interval, report_interval, auto_update, custom_ct, custom_cu, custom_cm, custom_bd, rx_correction, tx_correction, offline_notify_disabled, is_hidden } = data;
+      const { id, name, server_group, tags, note, price, billing_cycle, auto_renewal, currency, expire_date, traffic_limit, traffic_calc_type, reset_day, collect_interval, report_interval, auto_update, custom_ct, custom_cu, custom_cm, custom_bd, rx_correction, tx_correction, offline_notify_disabled, is_hidden } = data;
       if (!id || !isValidUUID(id)) {
         return createBadRequestResponse('invalidServerId');
       }
@@ -537,19 +555,30 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
       if (safeRx === undefined || safeTx === undefined) {
         return createBadRequestResponse('invalidTrafficCorrection');
       }
+
+      const billingData = normalizeServerBillingData({
+        price,
+        billing_cycle,
+        auto_renewal,
+        currency,
+        expire_date
+      });
       
       try {
         await env.DB.prepare(`
           UPDATE servers
-          SET name = ?, server_group = ?, tags = ?, note = ?, price = ?, expire_date = ?, traffic_limit = ?, traffic_calc_type = ?, reset_day = ?, collect_interval = ?, report_interval = ?, auto_update = ?, custom_ct = ?, custom_cu = ?, custom_cm = ?, custom_bd = ?, rx_correction = ?, tx_correction = ?, offline_notify_disabled = ?, is_hidden = ?
+          SET name = ?, server_group = ?, tags = ?, note = ?, price = ?, billing_cycle = ?, auto_renewal = ?, currency = ?, expire_date = ?, traffic_limit = ?, traffic_calc_type = ?, reset_day = ?, collect_interval = ?, report_interval = ?, auto_update = ?, custom_ct = ?, custom_cu = ?, custom_cm = ?, custom_bd = ?, rx_correction = ?, tx_correction = ?, offline_notify_disabled = ?, is_hidden = ?
           WHERE id = ?
         `).bind(
           name || '',
           server_group || 'Default',
           safeTags,
           safeNote,
-          price || '',
-          expire_date || '',
+          billingData.price,
+          billingData.billing_cycle,
+          billingData.auto_renewal,
+          billingData.currency,
+          billingData.expire_date,
           traffic_limit || '',
           traffic_calc_type || 'total',
           normalizedAgentConfig.reset_day,
@@ -670,21 +699,27 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
         usedPartitionIds.add(partitionId);
         existingIds.add(server.id);
 
+        const billingData = normalizeServerBillingData(server);
+
         try {
           await env.DB.prepare(`
-            INSERT INTO servers (id, name, server_group, tags, note, price, expire_date,
+            INSERT INTO servers (id, name, server_group, tags, note, price, billing_cycle, auto_renewal,
+              currency, expire_date,
               traffic_limit, traffic_calc_type, reset_day, collect_interval, report_interval,
               auto_update, custom_ct, custom_cu, custom_cm, custom_bd, rx_correction, tx_correction,
               offline_notify_disabled, is_hidden, sort_order, history_partition_id, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).bind(
             server.id,
             server.name || '',
             server.server_group || 'Default',
             server.tags || '',
             server.note || '',
-            server.price || '',
-            server.expire_date || '',
+            billingData.price,
+            billingData.billing_cycle,
+            billingData.auto_renewal,
+            billingData.currency,
+            billingData.expire_date,
             server.traffic_limit || '',
             server.traffic_calc_type || 'total',
             server.reset_day ?? 1,

@@ -4,6 +4,7 @@ import { getPublicAssetUrl } from '../utils/config'
 import { currentLang, useTranslation } from '../utils/i18n'
 import { PING } from '../utils/constants'
 import { normalizeTimestamp, formatDateTime } from '../utils/time.js'
+import { formatBillingPrice } from '../../utils/serverBilling.js'
 
 export const DEFAULT_SERVER_CARD_CONFIG = {
   show_price: true,
@@ -116,6 +117,7 @@ export function useServerCardData(props) {
   const totalTx = computed(() => formatBytes(props.server.net_tx))
   const totalRxMonthly = computed(() => formatBytes(props.server.net_rx_monthly))
   const totalTxMonthly = computed(() => formatBytes(props.server.net_tx_monthly))
+  const priceText = computed(() => formatBillingPrice(props.server, currentLang.value))
 
   const loadAvg = computed(() => {
     const raw = String(props.server.load_avg || '').trim()
@@ -255,6 +257,7 @@ export function useServerCardData(props) {
     totalTx,
     totalRxMonthly,
     totalTxMonthly,
+    priceText,
     loadAvg,
     uptimeText,
     ramUsageText,

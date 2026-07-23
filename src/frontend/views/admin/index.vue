@@ -452,6 +452,7 @@ import { PING_NODE_FIELDS, validatePingNode } from '../../utils/pingNode.js'
 import { normalizeDisplayMode, resolveDisplayMode } from '../../utils/displayMode.js'
 import { usePasswordVisibility } from '../../composables/usePasswordVisibility'
 import { useTurnstile } from './composables/useTurnstile'
+import { detectBillingCycle, detectCurrencySymbol, normalizeBillingCycle, normalizeCurrency, normalizePrice, renewExpireDateIfNeeded } from '../../../utils/serverBilling.js'
 
 const trans = useTranslation()
 const route = useRoute()
@@ -602,6 +603,9 @@ const editForm = ref({
   tags: '',
   note: '',
   price: '',
+  billing_cycle: 'month',
+  auto_renewal: false,
+  currency: '¥',
   expire_date: '',
   traffic_limit: '',
   traffic_calc_type: 'total',
@@ -1199,7 +1203,10 @@ const openEditModal = (server) => {
     server_group: server.server_group || '',
     tags: server.tags || '',
     note: server.note || '',
-    price: server.price || '',
+    price: normalizePrice(server.price),
+    billing_cycle: normalizeBillingCycle(detectBillingCycle(server.price) || server.billing_cycle),
+    auto_renewal: server.auto_renewal === '1' || server.auto_renewal === 1 || server.auto_renewal === true,
+    currency: normalizeCurrency(server.currency || detectCurrencySymbol(server.price) || '¥'),
     expire_date: server.expire_date || '',
     traffic_limit: server.traffic_limit || '',
     traffic_calc_type: server.traffic_calc_type || 'total',
@@ -1257,6 +1264,21 @@ const saveEdit = async () => {
     return
   }
 
+  const normalizedBillingCycle = normalizeBillingCycle(editForm.value.billing_cycle)
+  const normalizedAutoRenewal = editForm.value.auto_renewal ? '1' : '0'
+  const normalizedPrice = normalizePrice(editForm.value.price)
+  const normalizedCurrency = normalizeCurrency(editForm.value.currency || detectCurrencySymbol(editForm.value.price) || '¥')
+  const normalizedExpireDate = renewExpireDateIfNeeded(
+    editForm.value.expire_date,
+    normalizedBillingCycle,
+    normalizedAutoRenewal
+  ).expire_date
+
+  editForm.value.price = normalizedPrice
+  editForm.value.currency = normalizedCurrency
+  editForm.value.billing_cycle = normalizedBillingCycle
+  editForm.value.expire_date = normalizedExpireDate
+
   const data = {
     action: 'edit',
     id: editForm.value.id,
@@ -1264,8 +1286,11 @@ const saveEdit = async () => {
     server_group: editForm.value.server_group,
     tags: editForm.value.tags,
     note: editForm.value.note,
-    price: editForm.value.price,
-    expire_date: editForm.value.expire_date,
+    price: normalizedPrice,
+    billing_cycle: normalizedBillingCycle,
+    auto_renewal: normalizedAutoRenewal,
+    currency: normalizedCurrency,
+    expire_date: normalizedExpireDate,
     traffic_limit: editForm.value.traffic_limit,
     traffic_calc_type: editForm.value.traffic_calc_type,
     reset_day: editForm.value.reset_day,
