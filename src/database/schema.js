@@ -6,6 +6,8 @@ import { addHistoryColumns, ensureHistoryIndex, isHistoryOptimized } from './upd
 
 let dbInitialized = false;
 
+const LOSS_AGG_COLUMNS = new Set(['loss_ct', 'loss_cu', 'loss_cm', 'loss_bd']);
+
 export async function initDatabase(db) {
   if (dbInitialized) return;
 
@@ -109,6 +111,7 @@ export async function initDatabase(db) {
           os TEXT DEFAULT '',
           kernel_version TEXT DEFAULT '',
           region TEXT DEFAULT '',
+          ip TEXT DEFAULT '',
           ip_v4 TEXT DEFAULT '0',
           ip_v6 TEXT DEFAULT '0',
           boot_time TEXT DEFAULT '',
@@ -253,10 +256,20 @@ export async function getMetricsHistory(db, serverId, hours, columns, server = n
     idRange = getHistoryIdRange(historyInfo.partitionId, queryStart);
   }
 
-  const sourceQueries = [];
-  const bindValues = [intervalMs];
+  const columnList = columns.split(',').map(c => c.trim()).filter(c => c && c !== 'timestamp');
+  const sourceColumns = columnList.join(', ');
+  const lossColumns = columnList.filter(col => LOSS_AGG_COLUMNS.has(col));
+  const lossWindowExpressions = lossColumns.map(col =>
+    `MAX(${col}) OVER (PARTITION BY bucket) AS ${col}_bucket_max`
+  );
+  const selectColumns = columnList.map(col =>
+    LOSS_AGG_COLUMNS.has(col) ? `${col}_bucket_max AS ${col}` : col
+  );
 
-  sourceQueries.push(buildHistorySourceQuery('metrics_history', currentUsesIdRange, columns));
+  const sourceQueries = [];
+  const bindValues = [];
+
+  sourceQueries.push(buildHistorySourceQuery('metrics_history', currentUsesIdRange, sourceColumns));
   if (currentUsesIdRange) {
     bindValues.push(idRange.startId, idRange.endId);
   } else {
@@ -265,7 +278,7 @@ export async function getMetricsHistory(db, serverId, hours, columns, server = n
 
   if (oldTableExists) {
     debug('[History] 跨周查询，合并 metrics_history 和 metrics_history_old');
-    sourceQueries.push(buildHistorySourceQuery('metrics_history_old', oldUsesIdRange, columns));
+    sourceQueries.push(buildHistorySourceQuery('metrics_history_old', oldUsesIdRange, sourceColumns));
     if (oldUsesIdRange) {
       bindValues.push(idRange.startId, idRange.endId);
     } else {
@@ -273,20 +286,31 @@ export async function getMetricsHistory(db, serverId, hours, columns, server = n
     }
   }
 
+  bindValues.push(intervalMs);
+
   const rawResult = await db.prepare(`
-    WITH sampled AS (
+    WITH history_rows AS (
+      ${sourceQueries.join('\n        UNION ALL\n')}
+    ),
+    bucketed AS (
       SELECT
         timestamp,
-        ${columns},
+        ${sourceColumns},
+        CAST(timestamp / ? AS INTEGER) AS bucket
+      FROM history_rows
+    ),
+    sampled AS (
+      SELECT
+        timestamp,
+        ${sourceColumns},
         ROW_NUMBER() OVER (
-          PARTITION BY CAST(timestamp / ? AS INTEGER)
+          PARTITION BY bucket
           ORDER BY timestamp
         ) AS rn
-      FROM (
-        ${sourceQueries.join('\n        UNION ALL\n')}
-      )
+        ${lossWindowExpressions.length ? `,\n        ${lossWindowExpressions.join(',\n        ')}` : ''}
+      FROM bucketed
     )
-    SELECT timestamp, ${columns}
+    SELECT timestamp, ${selectColumns.join(', ')}
     FROM sampled
     WHERE rn = 1
   `).bind(...bindValues).all();
@@ -351,7 +375,7 @@ export async function weeklyCleanup(db) {
   }
 }
 
-export async function saveMetricsHistory(db, serverId, historyPartitionId, metrics, regionCode = '', timestamp = null, agentVersion = '') {
+export async function saveMetricsHistory(db, serverId, historyPartitionId, metrics, regionCode = '', timestamp = null, agentVersion = '', ip = '') {
   const historyId = buildHistoryId(historyPartitionId, timestamp);
   const rawTimestamp = Number(timestamp);
   const now = Number.isFinite(rawTimestamp) && rawTimestamp > 0
@@ -383,7 +407,7 @@ export async function saveMetricsHistory(db, serverId, historyPartitionId, metri
       loss_ct, loss_cu, loss_cm, loss_bd,
       ram_total, ram_used, swap_total, swap_used,
       disk_total, disk_used,
-      cpu_cores, cpu_info, gpu_info, arch, os, kernel_version, region, ip_v4, ip_v6, boot_time,
+      cpu_cores, cpu_info, gpu_info, arch, os, kernel_version, region, ip, ip_v4, ip_v6, boot_time,
       net_rx_monthly, net_tx_monthly
     ) VALUES (
       ?, ?, ?, ?, ?,
@@ -393,7 +417,7 @@ export async function saveMetricsHistory(db, serverId, historyPartitionId, metri
       ?, ?, ?, ?,
       ?, ?, ?, ?,
       ?, ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?
     )
   `).bind(
@@ -431,6 +455,7 @@ export async function saveMetricsHistory(db, serverId, historyPartitionId, metri
     metrics.os || '',
     metrics.kernel_version || '',
     regionCode,
+    ip || '',
     metrics.ip_v4 || '0',
     metrics.ip_v6 || '0',
     metrics.boot_time || '',
