@@ -189,7 +189,7 @@
 ### 0.5 限流与配额
 
 - ~~Cloudflare Workers / D1 固定限制为 D1 500 万行读、10 万行写、Workers 10 万次请求/日。~~ **2026-07-26 修订**：配额取决于 Cloudflare 当前套餐与计费策略，不属于本项目 API 的固定契约，应以 Cloudflare Dashboard 和官方文档为准。
-- `/admin/api?action=d1_usage` 可查询当前账户当日用量与近 24h 用量。
+- `/admin/api?action=d1_usage` 可查询当前账户 UTC 当日用量与 UTC 昨日用量。
 
 ### 0.6 CORS
 
@@ -258,8 +258,8 @@ CORS_ALLOWED_ORIGINS=https://status.example.com,https://admin.example.com
       "processes": "256",
       "tcp_conn": "32",
       "udp_conn": "4",
-      "ip_v4": "1",
-      "ip_v6": "1",
+      "ip_v4": "203.0.113.10",
+      "ip_v6": "2001:db8::10",
       "ping_ct": "23",
       "ping_cu": "25",
       "ping_cm": "30",
@@ -319,8 +319,8 @@ CORS_ALLOWED_ORIGINS=https://status.example.com,https://admin.example.com
 | `processes`      | string\|number | -   | 是  | 进程数                                         |
 | `tcp_conn`       | string\|number | -   | 是  | TCP 活跃连接数                                   |
 | `udp_conn`       | string\|number | -   | 是  | UDP 套接字数                                    |
-| `ip_v4`          | string\|number | -   | 是  | `1`/`0`，IPv4 可达性                            |
-| `ip_v6`          | string\|number | -   | 是  | `1`/`0`，IPv6 可达性                            |
+| `ip_v4`          | string\|number | -   | 是  | 公网 IPv4 地址；`0` 表示不可达；兼容旧探针 `1` 表示可达但未上报地址 |
+| `ip_v6`          | string\|number | -   | 是  | 公网 IPv6 地址；`0` 表示不可达；兼容旧探针 `1` 表示可达但未上报地址 |
 | `ping_ct`        | string\|number\|false\|null | ms  | 否  | 电信节点延时；空值表示未取到，`false` / `"false"` 表示禁用 |
 | `ping_cu`        | string\|number\|false\|null | ms  | 否  | 联通节点延时                                      |
 | `ping_cm`        | string\|number\|false\|null | ms  | 否  | 移动节点延时                                      |
@@ -1027,7 +1027,7 @@ Header：`X-Turnstile-Token: <token>`（当 `site_options.turnstile_enabled` 或
       "rowsWritten": 678,
       "workersRequests": 1234
     },
-    "last24Hours": {
+    "yesterday": {
       "rowsRead": 23456,
       "rowsWritten": 789,
       "workersRequests": 2345
@@ -1038,6 +1038,8 @@ Header：`X-Turnstile-Token: <token>`（当 `site_options.turnstile_enabled` 或
 ```
 
 > ~~响应会返回日期、套餐限额、剩余额度、数据库数量和 Account ID。~~ **2026-07-26 修订**：当前只返回两个时间范围的 `rowsRead`、`rowsWritten`、`workersRequests`；额度由前端自行展示，不属于 API 响应。
+>
+> **统计窗口**：`today` 为 UTC 当日 `00:00:00` 至 `23:59:59`；`yesterday` 为 UTC 昨日 `00:00:00` 至 `23:59:59`。
 
 **Response 失败**
 
@@ -1544,8 +1546,8 @@ UUID 缺失或格式非法时返回 `400 { "error": "invalidServerId", "code": 4
 | `kernel_version`                              | string             | 内核版本                    |
 | `agent_version`                               | string             | 最新一次上报的探针版本号              |
 | `region`                                      | string             | `request.cf.country` 或 `cf-ipcountry` 的原始值；通常为大写两字母国家/地区代码 |
-| `ip_v4`                                       | string `"0"`/`"1"` | IPv4 可达性                  |
-| `ip_v6`                                       | string `"0"`/`"1"` | IPv6 可达性                  |
+| `ip_v4`                                       | string `"0"`/`"1"` | 公共 REST 接口仅返回 IPv4 可达性，不暴露公网地址 |
+| `ip_v6`                                       | string `"0"`/`"1"` | 公共 REST 接口仅返回 IPv6 可达性，不暴露公网地址 |
 | `boot_time`                                   | string             | 启动时间（毫秒）                  |
 | `last_updated`                                | number             | 最新指标记录的 `timestamp`（毫秒） |
 | `is_online`                                   | boolean            | 5 分钟内是否有上报（仅 `list` 接口计算） |
@@ -1680,7 +1682,7 @@ curl -X POST https://status.example.com/update \
       "os":"Ubuntu 22.04","arch":"x86_64","kernel_version":"6.8.0-36-generic","cpu_info":"Intel Xeon","cpu_cores":"4",
       "gpu_info":[{"id":"0","name":"NVIDIA GPU","info":12.5}],
       "processes":"256","tcp_conn":"32","udp_conn":"4",
-      "ip_v4":"1","ip_v6":"1",
+      "ip_v4":"203.0.113.10","ip_v6":"2001:db8::10",
       "ping_ct":"23","ping_cu":"25","ping_cm":"30","ping_bd":"40"
     }
   }'

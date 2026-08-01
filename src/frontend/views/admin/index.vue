@@ -336,33 +336,33 @@
             </div>
 
             <div class="quota-section mt-4">
-              <div class="quota-section-title">{{ trans.last24HoursUsage }}</div>
+              <div class="quota-section-title">{{ trans.yesterdayUsage }}</div>
               <div class="quota-progress-list">
                 <div class="quota-progress-item">
                   <div class="flex-justify-between text-sm mb-1">
-                    <span>{{ trans.d1RowsRead }}：{{ formatNumber(d1UsageResult.usage.last24Hours.rowsRead) }} / {{ formatNumber(5000000) }}</span>
-                    <span>{{ getUsagePercent(d1UsageResult.usage.last24Hours.rowsRead, 5000000) }}%</span>
+                    <span>{{ trans.d1RowsRead }}：{{ formatNumber(d1UsageResult.usage.yesterday.rowsRead) }} / {{ formatNumber(5000000) }}</span>
+                    <span>{{ getUsagePercent(d1UsageResult.usage.yesterday.rowsRead, 5000000) }}%</span>
                   </div>
                   <div class="quota-progress-bar">
-                    <div class="quota-progress-fill" :style="{ width: getUsagePercent(d1UsageResult.usage.last24Hours.rowsRead, 5000000) + '%' }"></div>
+                    <div class="quota-progress-fill" :style="{ width: getUsagePercent(d1UsageResult.usage.yesterday.rowsRead, 5000000) + '%' }"></div>
                   </div>
                 </div>
                 <div class="quota-progress-item">
                   <div class="flex-justify-between text-sm mb-1">
-                    <span>{{ trans.d1RowsWritten }}：{{ formatNumber(d1UsageResult.usage.last24Hours.rowsWritten) }} / {{ formatNumber(100000) }}</span>
-                    <span>{{ getUsagePercent(d1UsageResult.usage.last24Hours.rowsWritten, 100000) }}%</span>
+                    <span>{{ trans.d1RowsWritten }}：{{ formatNumber(d1UsageResult.usage.yesterday.rowsWritten) }} / {{ formatNumber(100000) }}</span>
+                    <span>{{ getUsagePercent(d1UsageResult.usage.yesterday.rowsWritten, 100000) }}%</span>
                   </div>
                   <div class="quota-progress-bar">
-                    <div class="quota-progress-fill" :style="{ width: getUsagePercent(d1UsageResult.usage.last24Hours.rowsWritten, 100000) + '%' }"></div>
+                    <div class="quota-progress-fill" :style="{ width: getUsagePercent(d1UsageResult.usage.yesterday.rowsWritten, 100000) + '%' }"></div>
                   </div>
                 </div>
-                <div v-if="d1UsageResult.usage.last24Hours.workersRequests" class="quota-progress-item">
+                <div v-if="d1UsageResult.usage.yesterday.workersRequests" class="quota-progress-item">
                   <div class="flex-justify-between text-sm mb-1">
-                    <span>{{ trans.workersRequests }}：{{ formatNumber(d1UsageResult.usage.last24Hours.workersRequests) }} / {{ formatNumber(100000) }}</span>
-                    <span>{{ getUsagePercent(d1UsageResult.usage.last24Hours.workersRequests, 100000) }}%</span>
+                    <span>{{ trans.workersRequests }}：{{ formatNumber(d1UsageResult.usage.yesterday.workersRequests) }} / {{ formatNumber(100000) }}</span>
+                    <span>{{ getUsagePercent(d1UsageResult.usage.yesterday.workersRequests, 100000) }}%</span>
                   </div>
                   <div class="quota-progress-bar">
-                    <div class="quota-progress-fill" :style="{ width: getUsagePercent(d1UsageResult.usage.last24Hours.workersRequests, 100000) + '%' }"></div>
+                    <div class="quota-progress-fill" :style="{ width: getUsagePercent(d1UsageResult.usage.yesterday.workersRequests, 100000) + '%' }"></div>
                   </div>
                 </div>
               </div>
@@ -704,7 +704,13 @@ const clearAdminPasswordInputs = () => {
   settings.value.confirm_password = ''
 }
 
+const isAdminUsernameEmpty = () => !String(settings.value.username || '').trim()
+
 const toggleAdminPasswordChange = () => {
+  if (isAdminUsernameEmpty()) {
+    changeAdminPassword.value = true
+    return
+  }
   changeAdminPassword.value = !changeAdminPassword.value
   if (!changeAdminPassword.value) {
     clearAdminPasswordInputs()
@@ -919,6 +925,7 @@ const logout = async () => {
   latestAgentVersion.value = ''
   clearTurnstile()
   await loadTurnstileConfig()
+  window.location.href = '/'
 }
 
 const checkLoginStatus = () => {
@@ -1041,13 +1048,22 @@ const loadSettings = async () => {
         csp_static: settingsData.csp_static || '',
         csp_api: settingsData.csp_api || ''
       }
-      changeAdminPassword.value = false
+      changeAdminPassword.value = !String(settings.value.username || '').trim()
       apiSecret.value = data.api_secret || ''
     }
   } catch (e) {
     console.error('[ERROR] Load settings failed:', e)
   }
 }
+
+watch(
+  () => settings.value.username,
+  () => {
+    if (isAdminUsernameEmpty()) {
+      changeAdminPassword.value = true
+    }
+  }
+)
 
 const saveSettings = async () => {
   if (saving.value) return
