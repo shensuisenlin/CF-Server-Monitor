@@ -9,7 +9,7 @@
 
 set -eu
 
-AGENT_VERSION="1.3.7"
+AGENT_VERSION="1.3.8"
 
 # 路径定义（配置文件系统）
 CONFIG_DIR="/etc/config/cf-probe"
@@ -17,6 +17,7 @@ CONFIG_FILE="${CONFIG_DIR}/config.conf"
 TRAFFIC_DATA_FILE="${CONFIG_DIR}/traffic.dat"
 OLD_TRAFFIC_DATA_FILE="/var/lib/cf-probe/traffic.dat"
 MAX_TRAFFIC_CORRECTION_GB=1000000
+AUTO_UPDATE_DELAY_SECONDS=60
 
 # 颜色定义（busybox sh 下仅 printf '%b' 可用，所以统一用 printf）
 RED='\033[0;31m'
@@ -394,10 +395,10 @@ schedule_agent_update() {
     fi
     log_debug "Auto update requested: install_url=${install_url}"
     log_debug "Auto update temp dir: ${update_tmp_dir}"
-
-    nohup /bin/sh -c 'tmp="$2/cf-probe-auto-update.$$"; rm -f "$tmp"; if curl -fsSL --connect-timeout 5 -m 30 "$1" -o "$tmp"; then /bin/sh "$tmp" install; fi; rm -f "$tmp"' _ "$install_url" "$update_tmp_dir" >/dev/null 2>&1 &
     printf '%s\n' "$now" > "$lock_file" 2>/dev/null || true
-    log_info "Auto update scheduled"
+
+    nohup /bin/sh -c 'sleep "$3"; tmp="$2/cf-probe-auto-update.$$"; rm -f "$tmp"; if curl -fsSL --connect-timeout 5 -m 30 "$1" -o "$tmp"; then /bin/sh "$tmp" install; fi; rm -f "$tmp"' _ "$install_url" "$update_tmp_dir" "$AUTO_UPDATE_DELAY_SECONDS" >/dev/null 2>&1 &
+    log_info "Auto update scheduled after ${AUTO_UPDATE_DELAY_SECONDS}s"
     return 0
 }
 
@@ -717,6 +718,13 @@ is_leap_year() {
     [ $((year % 4)) -eq 0 ] && [ $((year % 100)) -ne 0 ] || [ $((year % 400)) -eq 0 ]
 }
 
+to_decimal() {
+    local value="${1:-0}"
+    value=$(printf '%s' "$value" | sed 's/^0*//')
+    case "$value" in ''|*[!0-9]*) value=0 ;; esac
+    printf '%s' "$value"
+}
+
 # 获取当月账单周期起始时间戳（UTC+0）
 get_period_start_ts() {
     local reset_day="$1"
@@ -725,26 +733,43 @@ get_period_start_ts() {
     local year month day
     # 用 awk 将 epoch 秒转换为 year month day（UTC），避免 BusyBox date -d 不可用
     local _date_parts
-    _date_parts=$(awk 'BEGIN{
-        t='"${now_ts}"'; d=int(t/86400)+719468; y=int((d-122.1)/365.25);
-        m=int((d-365.25*y+122.1)/30.6001); day=d-int(30.6001*(m+(m>2?1:0)-3)+1.5);
-        if(m<14) m=m-1; else { m=m-13; if(m>2) y=y+1 }
+    _date_parts=$(awk -v ts="$now_ts" '
+    BEGIN {
+        secs = int(ts); y = 1970
+        while (1) {
+            leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)
+            days_year = leap ? 366 : 365
+            if (secs < days_year * 86400) break
+            secs -= days_year * 86400; y++
+        }
+        mdays[1]=31; mdays[2]=leap?29:28; mdays[3]=31; mdays[4]=30
+        mdays[5]=31; mdays[6]=30; mdays[7]=31; mdays[8]=31
+        mdays[9]=30; mdays[10]=31; mdays[11]=30; mdays[12]=31
+        m = 1
+        while (m <= 12) {
+            if (secs < mdays[m] * 86400) break
+            secs -= mdays[m] * 86400; m++
+        }
+        day = int(secs / 86400) + 1
         printf "%04d %02d %02d\n", y, m, day
     }')
     year=$(echo "$_date_parts" | awk '{print $1}')
     month=$(echo "$_date_parts" | awk '{print $2}')
     day=$(echo "$_date_parts" | awk '{print $3}')
+    month=$(to_decimal "$month")
+    day=$(to_decimal "$day")
     
-    local target_day="$reset_day"
+    local target_day
+    target_day=$(to_decimal "$reset_day")
     case "$month" in
-        02) 
+        2) 
             if is_leap_year "$year"; then
                 [ "$target_day" -gt 29 ] && target_day=29
             else
                 [ "$target_day" -gt 28 ] && target_day=28
             fi
             ;;
-        04|06|09|11) [ "$target_day" -gt 30 ] && target_day=30 ;;
+        4|6|9|11) [ "$target_day" -gt 30 ] && target_day=30 ;;
     esac
     
     local period_start_ts
@@ -762,14 +787,14 @@ get_period_start_ts() {
         [ "$prev_month" -eq 0 ] && { prev_month=12; year=$((year - 1)); }
         local prev_month_str=$(printf "%02d" "$prev_month")
         case "$prev_month" in
-            02) 
+            2) 
                 if is_leap_year "$year"; then
                     [ "$target_day" -gt 29 ] && target_day=29
                 else
                     [ "$target_day" -gt 28 ] && target_day=28
                 fi
                 ;;
-            04|06|09|11) [ "$target_day" -gt 30 ] && target_day=30 ;;
+            4|6|9|11) [ "$target_day" -gt 30 ] && target_day=30 ;;
         esac
         period_start_ts=$(awk 'BEGIN{
             y='"${year}"'; m='"${prev_month}"'; d='"${target_day}"';
@@ -820,6 +845,7 @@ calc_monthly_traffic() {
     
     local period_start_ts
     period_start_ts=$(get_period_start_ts "$reset_day" "$now_ts")
+    case "$period_start_ts" in ''|*[!0-9]*) period_start_ts=0 ;; esac
     
     local rx_delta=0 tx_delta=0
     if [ "$saved_last_check" -ne 0 ]; then
@@ -1100,7 +1126,7 @@ write_probe_result() {
 get_cf_trace_ip() {
     local curl_family="$1"
     local ip_value
-    ip_value=$(curl "$curl_family" -s -m 2 --connect-timeout 2 https://cloudflare.com/cdn-cgi/trace 2>/dev/null | awk -F= '$1 == "ip" { print $2; exit }') || ip_value=""
+    ip_value=$(curl "$curl_family" --noproxy cloudflare.com -s -m 5 --connect-timeout 5 https://cloudflare.com/cdn-cgi/trace 2>/dev/null | awk -F= '$1 == "ip" { print $2; exit }') || ip_value=""
     if [ -n "$ip_value" ]; then
         printf '%s\n' "$ip_value"
     else
